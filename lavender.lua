@@ -3447,10 +3447,14 @@ function resolver:GetAnimationState(_Entity)
     if not (_Entity) then
         return
     end
-    local player_ptr = ffi.cast( "void***", get_client_entity(ientitylist, _Entity))
-    local animstate_ptr = ffi.cast( "char*" , player_ptr ) + 0x9960
-    local state = ffi.cast( "struct c_animstate**", animstate_ptr )[0]
-
+    -- Guard against invalid entity pointers
+    local player = get_client_entity(ientitylist, _Entity)
+    if player == nil then
+        return
+    end
+    local player_ptr = ffi.cast("void***", player)
+    local animstate_ptr = ffi.cast("char*", player_ptr) + 0x9960
+    local state = ffi.cast("struct c_animstate**", animstate_ptr)[0]
     return state
 end
 
@@ -3564,6 +3568,7 @@ function resolver:on_net_update_end()
         self.data.vector_origin[ent] = vector(entity.get_origin(ent))
 
         if (self.old_data.simulation_time[ent] ~= nil and self.data.simulation_time[ent] == self.old_data.simulation_time[ent]) then
+            -- No animation update, keep previous resolver data for stability
             goto skip
         end
  
@@ -3606,7 +3611,8 @@ function resolver:on_net_update_end()
 
         local x, y, z = client.eye_position()
 
-        local angles = {-90, -60, -30, 30, 60, 90}
+        -- Sample a wider arc for better freestanding inference
+        local angles = {-120, -90, -60, -30, 30, 60, 90, 120}
 
         for i, angle in ipairs(angles) do
 
@@ -3636,7 +3642,7 @@ function resolver:on_net_update_end()
 
         end
 
-        if trace_bullet_data.left + trace_bullet_data.right > 0 then
+        if (trace_bullet_data.left + trace_bullet_data.right) > 0 then
 
             if trace_bullet_data.left > trace_bullet_data.right then
                 side = 1
@@ -3688,7 +3694,7 @@ function resolver:on_net_update_end()
 
         end
 
-    if (self.data.missed_shots[ent] or 0) ~= nil and (self.data.missed_shots[ent] or 0) <= 4 then
+    if (self.data.missed_shots[ent] or 0) <= 4 then
 
             if self.data.missed_shots[ent] == 1 and self.data.missed_shots[ent] ~= self.old_data.missed_shots[ent] then
 
@@ -3696,9 +3702,12 @@ function resolver:on_net_update_end()
 
             end
 
+            -- Expand brute stages and add center bias reset for stability
             local stages = {
                 -max_body_yaw,
+                -max_body_yaw * 0.5,
                 29,
+                max_body_yaw * 0.5,
                 max_body_yaw,
                 0
             }
@@ -3713,7 +3722,7 @@ function resolver:on_net_update_end()
             body_yaw = missed_side == 0 and -stages[stage_index] or stages[stage_index]
             side = 1
 
-        elseif self.data.missed_shots[ent] or 0 > 4 then
+        elseif (self.data.missed_shots[ent] or 0) > 4 then
             
             self.data.missed_shots[ent] = nil
             
@@ -3757,7 +3766,9 @@ end)
 
 client.set_event_callback("aim_hit", function(shot)
     if shot ~= nil and shot.target ~= nil then
+        -- On hit, reset missed counter but keep last mode for continuity
         resolver.data.missed_shots[shot.target] = 0
+        resolver.mode[shot.target] = resolver.mode[shot.target] or "STATIC"
     end
 end)
 
@@ -3782,24 +3793,30 @@ function resolver:on_paint()
     local me = entity.get_local_player()
 
     local enemy = entity.get_players(true)
-    local num_enemies = table.getn(enemy) -- Get the number of enemies
+    local num_enemies = #enemy
 
 
     
 
-    for i, v in pairs(enemy) do
-
-        local ent = enemy[i]
-
-
-        if resolver.data.body_yaw[ent] == nil then
-            return end
-
-        if ent == nil or not entity.is_alive(ent) or not entity.is_enemy(ent) or not entity.is_alive(me) then
-            return
+    for i, ent in ipairs(enemy) do
+        if ent ~= nil and entity.is_alive(ent) and entity.is_enemy(ent) and entity.is_alive(me) and resolver.data.body_yaw[ent] ~= nil then
+            local max_yaw = resolver:get_max_body_yaw(ent) or 60
+            local corrected = math.floor(tonumber(resolver.data.body_yaw[ent]) or 0)
+            local mode = resolver.mode[ent] and string.lower(resolver.mode[ent]) or "unknown"
+            renderer.text(
+                lavender.pos.resolver.x + 300,
+                lavender.pos.resolver.y - 120 + (15 * i),
+                255, 255, 255, 255, "", 0,
+                string.format(
+                    "player: %s ~ state: %s / max: %s ~ corrected: %s / type: %s",
+                    string.lower(tostring(entity.get_player_name(ent))),
+                    lavender.funcs.aa.get_state(ent),
+                    max_yaw,
+                    corrected,
+                    mode
+                )
+            )
         end
-        renderer.text(lavender.pos.resolver.x + 300, lavender.pos.resolver.y - 120 + (15 * i), 255, 255, 255, 255, "", 0, string.format("player: %s ~ state: %s / max: %s ~ corrected: %s / type: %s", string.lower(tostring(entity.get_player_name(ent))), lavender.funcs.aa.get_state(ent), dbangles, plist.get(tonumber(ent), "Force body yaw value"), string.lower(resolver.mode[ent])))
-        
     end
     renderer.text(lavender.pos.resolver.x + 300, lavender.pos.resolver.y - 120, 255, 255, 255, 255, "", 0, "resolver panel ~ ids: " .. num_enemies)
 
