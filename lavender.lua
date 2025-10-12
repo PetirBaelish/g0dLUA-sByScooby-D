@@ -3498,12 +3498,37 @@ function resolver:get_max_body_yaw(ent)
     end
 
     local in_air = lavender.funcs.aa.in_air(ent)
+    -- Fallback for environments where lavender.funcs.aa.approach_angle may be nil
+    local approach = lavender.funcs and lavender.funcs.aa and lavender.funcs.aa.approach_angle
+    if type(approach) ~= 'function' then
+        approach = function(angle, target, step)
+            angle = tonumber(angle) or 0
+            target = tonumber(target) or 0
+            step = math.abs(tonumber(step) or 1)
+
+            local delta = (target - angle) % 360
+            if delta > 180 then delta = delta - 360 end
+
+            if math.abs(delta) <= step then
+                return target
+            end
+
+            if delta > 0 then
+                angle = angle + step
+            else
+                angle = angle - step
+            end
+
+            angle = ((angle + 180) % 360) - 180
+            return angle
+        end
+    end
     local body_yaw
     if in_air then
         if vel < 130 then
-            body_yaw = lavender.funcs.aa.approach_angle(last_body_yaw, max_body_yaw, 2)
+            body_yaw = approach(last_body_yaw, max_body_yaw, 2)
         else
-            body_yaw = lavender.funcs.aa.approach_angle(last_body_yaw, max_body_yaw / 2, 3)
+            body_yaw = approach(last_body_yaw, max_body_yaw / 2, 3)
         end
     else
         body_yaw = max_body_yaw - (math.min(vel, max_velocity) / (max_velocity * 2) * max_body_yaw)
