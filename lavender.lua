@@ -399,9 +399,11 @@ lavender.funcs = {
             return xpos + (x*globals.tickinterval()*ticks), ypos + (y*globals.tickinterval()*ticks), zpos + (z*globals.tickinterval()*ticks)
         end),
         get_velocity = LPH_NO_VIRTUALIZE(function(player)
-            local x,y,z = entity.get_prop(player, "m_vecVelocity")
-            if x == nil then return end
-            return math.sqrt(x*x + y*y + z*z)
+            local x, y, z = entity.get_prop(player, "m_vecVelocity")
+            if x == nil or y == nil or z == nil then
+                return 0
+            end
+            return math.sqrt(x * x + y * y + z * z)
         end),
         get_velocity_2d = LPH_NO_VIRTUALIZE(function(player)
             local vel1, vel2, vel3 = entity.get_prop(player, 'm_vecVelocity')
@@ -409,12 +411,10 @@ lavender.funcs = {
         end),
         in_air = LPH_NO_VIRTUALIZE(function(player)
             local flags = entity.get_prop(player, "m_fFlags")
-            
-            if bit.band(flags, 1) == 0 then
-                return true
+            if flags == nil then
+                return false
             end
-            
-            return false
+            return bit.band(flags, 1) == 0
         end),
         is_crouching = LPH_NO_VIRTUALIZE(function(player)
             local flags = entity.get_prop(player, "m_fFlags")
@@ -1477,8 +1477,12 @@ for k, v in pairs(lavender.antiaim.states) do
 
     local show = function() return ui.get(lavender.ui.aa.state) == v and lavender.ui.current_tab == "ANTIAIM" and (v == "global" and true or ui.get(lavender.ui.aa.states[v].master)) and ui.get(lavender.ui.aa.selection) == "state builder" end
 
-    lavender.ui.aa.states[v].pitch                  = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch", {"off", "default", "up", "down", "minimal", "random", "custom"}), function() return show() end, true)
+    lavender.ui.aa.states[v].pitch                  = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch", {"off", "default", "up", "down", "minimal", "random", "custom", "custom 3"}), function() return show() end, true)
     lavender.ui.aa.states[v].pitch_custom           = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch custom", -89, 89, 0, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom" end, true)
+    lavender.ui.aa.states[v].pitch_custom3_mode     = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› angel mode", {"cycle", "random", "angle 1", "angle 2", "angle 3"}), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom 3" end, true)
+    lavender.ui.aa.states[v].pitch_custom3_a1       = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch angel 1", -89, 89, 0, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom 3" end, true)
+    lavender.ui.aa.states[v].pitch_custom3_a2       = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch angel 2", -89, 89, 0, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom 3" end, true)
+    lavender.ui.aa.states[v].pitch_custom3_a3       = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch angel 3", -89, 89, 0, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom 3" end, true)
     lavender.ui.aa.states[v].yaw_base               = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› yaw \aB9BEFFFFbase", {"local view", "at targets"}), function() return show() end, true)
     lavender.ui.aa.states[v].yaw                    = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› yaw", {"off", "180", "spin", "static", "180 z", "crosshair"}), function() return show() end, true)
     lavender.ui.aa.states[v].jitter_type            = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› jitter type", {"default", "delayed", "flick"}), function() return show() and ui.get(lavender.ui.aa.states[v].yaw) ~= "off" end, true)
@@ -2548,6 +2552,28 @@ client.set_event_callback("setup_command", function(cmd)
         if pitch_choice == "custom" then
             ui.set(lavender.refs.aa.pitch, "custom")
             ui.set(lavender.refs.aa.pitch_custom, ui.get(lavender.ui.aa.states[state].pitch_custom))
+        elseif pitch_choice == "custom 3" then
+            -- Determine which angel to use
+            local mode = ui.get(lavender.ui.aa.states[state].pitch_custom3_mode)
+            local a1 = ui.get(lavender.ui.aa.states[state].pitch_custom3_a1)
+            local a2 = ui.get(lavender.ui.aa.states[state].pitch_custom3_a2)
+            local a3 = ui.get(lavender.ui.aa.states[state].pitch_custom3_a3)
+            local chosen = a1
+            if mode == "cycle" then
+                local idx = (globals.tickcount() % 3)
+                chosen = (idx == 0 and a1) or (idx == 1 and a2) or a3
+            elseif mode == "random" then
+                local r = client.random_int(1, 3)
+                chosen = (r == 1 and a1) or (r == 2 and a2) or a3
+            elseif mode == "angle 1" then
+                chosen = a1
+            elseif mode == "angle 2" then
+                chosen = a2
+            elseif mode == "angle 3" then
+                chosen = a3
+            end
+            ui.set(lavender.refs.aa.pitch, "custom")
+            ui.set(lavender.refs.aa.pitch_custom, chosen)
         else
             ui.set(lavender.refs.aa.pitch, pitch_choice)
         end
@@ -2832,6 +2858,27 @@ client.set_event_callback("setup_command", function(c)
     if stage_pitch_choice == "custom" then
         ui.set(lavender.refs.aa.pitch, "custom")
         ui.set(lavender.refs.aa.pitch_custom, ui.get(stage[set_stage].pitch_custom))
+    elseif stage_pitch_choice == "custom 3" then
+        local mode = ui.get(lavender.ui.aa.states[ui.get(lavender.ui.aa.state)].pitch_custom3_mode)
+        local a1 = ui.get(lavender.ui.aa.states[ui.get(lavender.ui.aa.state)].pitch_custom3_a1)
+        local a2 = ui.get(lavender.ui.aa.states[ui.get(lavender.ui.aa.state)].pitch_custom3_a2)
+        local a3 = ui.get(lavender.ui.aa.states[ui.get(lavender.ui.aa.state)].pitch_custom3_a3)
+        local chosen = a1
+        if mode == "cycle" then
+            local idx = (globals.tickcount() % 3)
+            chosen = (idx == 0 and a1) or (idx == 1 and a2) or a3
+        elseif mode == "random" then
+            local r = client.random_int(1, 3)
+            chosen = (r == 1 and a1) or (r == 2 and a2) or a3
+        elseif mode == "angle 1" then
+            chosen = a1
+        elseif mode == "angle 2" then
+            chosen = a2
+        elseif mode == "angle 3" then
+            chosen = a3
+        end
+        ui.set(lavender.refs.aa.pitch, "custom")
+        ui.set(lavender.refs.aa.pitch_custom, chosen)
     else
         ui.set(lavender.refs.aa.pitch, stage_pitch_choice)
     end
@@ -3148,12 +3195,11 @@ end)
 ui.update(lavender.ui.config.list, get_config_list())
 ui.set_callback(lavender.ui.config.list, function(value)
     local name = ""
-
-    local configs = get_config_list()
-
-    name = configs[ui.get(value)+1] or ""
+    local configs = get_config_list() or {}
+    -- value provided by callback is the index; fall back to current selection
+    local idx = tonumber(value) or ui.get(lavender.ui.config.list) or 0
+    name = configs[idx + 1] or ""
     ui.set(lavender.ui.config.name, name)
-
 end)
 
 
