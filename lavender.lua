@@ -3148,12 +3148,11 @@ end)
 ui.update(lavender.ui.config.list, get_config_list())
 ui.set_callback(lavender.ui.config.list, function(value)
     local name = ""
-
-    local configs = get_config_list()
-
-    name = configs[ui.get(value)+1] or ""
+    local configs = get_config_list() or {}
+    -- value provided by callback is the index; fall back to current selection
+    local idx = tonumber(value) or ui.get(lavender.ui.config.list) or 0
+    name = configs[idx + 1] or ""
     ui.set(lavender.ui.config.name, name)
-
 end)
 
 
