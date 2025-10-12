@@ -619,15 +619,13 @@ lavender.funcs = {
         
         end),
         approach_angle = LPH_NO_VIRTUALIZE(function(angle, target)
-
             if angle < target then
-                return math.max(angle + 1, target)
-            elseif angle > target then
                 return math.min(angle + 1, target)
+            elseif angle > target then
+                return math.max(angle - 1, target)
             else
                 return target
             end
-        
         end),
         hit_flag = LPH_JIT(function(ent)
 
@@ -1479,7 +1477,8 @@ for k, v in pairs(lavender.antiaim.states) do
 
     local show = function() return ui.get(lavender.ui.aa.state) == v and lavender.ui.current_tab == "ANTIAIM" and (v == "global" and true or ui.get(lavender.ui.aa.states[v].master)) and ui.get(lavender.ui.aa.selection) == "state builder" end
 
-    lavender.ui.aa.states[v].pitch                  = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch", {"off", "default", "up", "down", "minimal", "random"}), function() return show() end, true)
+    lavender.ui.aa.states[v].pitch                  = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch", {"off", "default", "up", "down", "minimal", "random", "custom"}), function() return show() end, true)
+    lavender.ui.aa.states[v].pitch_custom           = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch custom", -89, 89, 0, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom" end, true)
     lavender.ui.aa.states[v].yaw_base               = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› yaw \aB9BEFFFFbase", {"local view", "at targets"}), function() return show() end, true)
     lavender.ui.aa.states[v].yaw                    = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› yaw", {"off", "180", "spin", "static", "180 z", "crosshair"}), function() return show() end, true)
     lavender.ui.aa.states[v].jitter_type            = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› jitter type", {"default", "delayed", "flick"}), function() return show() and ui.get(lavender.ui.aa.states[v].yaw) ~= "off" end, true)
@@ -1522,7 +1521,8 @@ for i,v in pairs(stages) do
     stage[v].master = lavender.handlers.ui.new(ui.new_checkbox("AA", "Anti-aimbot angles", "‹\aB9BEFFFFenable\aCDCDCDFF› stage \aB9BEFFFF" .. v), function() return lavender.ui.current_tab == "ANTIAIM" and ui.get(lavender.ui.aa.selection) == "anti-bruteforce" and ui.get(lavender.ui.aa.antibrute_master) and ui.get(lavender.ui.aa.stage) == v end, true)
     local show = function() return lavender.ui.current_tab == "ANTIAIM" and ui.get(lavender.ui.aa.selection) == "anti-bruteforce" and ui.get(lavender.ui.aa.antibrute_master) and ui.get(lavender.ui.aa.stage) == v and ui.get(stage[v].master) end
 
-    stage[v].pitch             = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "‹\aB9BEFFFFstage " .. v ..  "\aCDCDCDFF› pitch", {"off", "default", "up", "down", "minimal", "random"}), function() return show() end, true)
+    stage[v].pitch             = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "‹\aB9BEFFFFstage " .. v ..  "\aCDCDCDFF› pitch", {"off", "default", "up", "down", "minimal", "random", "custom"}), function() return show() end, true)
+    stage[v].pitch_custom      = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles", "‹\aB9BEFFFFstage " .. v ..  "\aCDCDCDFF› pitch custom", -89, 89, 0, true, "°"), function() return show() and ui.get(stage[v].pitch) == "custom" end, true)
     stage[v].yaw_base          = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "‹\aB9BEFFFFstage " .. v ..  "\aCDCDCDFF› yaw \aB9BEFFFFbase", {"local view", "at targets"}), function() return show() end, true)
     stage[v].yaw               = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "‹\aB9BEFFFFstage " .. v ..  "\aCDCDCDFF› yaw", {"off", "180", "spin", "static", "180 z", "crosshair"}), function() return show() end, true)
     
@@ -2544,7 +2544,13 @@ client.set_event_callback("setup_command", function(cmd)
     if state ~= "global" and not ui.get(lavender.ui.aa.states[state].master) then
         state = "global"
     end
-        ui.set(lavender.refs.aa.pitch, ui.get(lavender.ui.aa.states[state].pitch))
+        local pitch_choice = ui.get(lavender.ui.aa.states[state].pitch)
+        if pitch_choice == "custom" then
+            ui.set(lavender.refs.aa.pitch, "custom")
+            ui.set(lavender.refs.aa.pitch_custom, ui.get(lavender.ui.aa.states[state].pitch_custom))
+        else
+            ui.set(lavender.refs.aa.pitch, pitch_choice)
+        end
         ui.set(lavender.refs.aa.yaw_base, ui.get(lavender.ui.aa.states[state].yaw_base))
         ui.set(lavender.refs.aa.yaw, ui.get(lavender.ui.aa.states[state].yaw))
         if ui.get(lavender.ui.aa.states[state].jitter_type) ~= "delayed" then
@@ -2553,11 +2559,11 @@ client.set_event_callback("setup_command", function(cmd)
         end
     -- ~
 
-    if ui.get(lavender.ui.aa.states[state].yaw_type) == "static" and (ui.get(lavender.ui.aa.states[state].jitter_type) ~= "delayed" or ui.get(lavender.ui.aa.states[state].jitter_type) ~= "flick") then
+    if ui.get(lavender.ui.aa.states[state].yaw_type) == "static" and (ui.get(lavender.ui.aa.states[state].jitter_type) ~= "delayed" and ui.get(lavender.ui.aa.states[state].jitter_type) ~= "flick") then
         ui.set(lavender.refs.aa.yaw_offset, ui.get(lavender.ui.aa.states[state].yaw_offset_static))
-    elseif ui.get(lavender.ui.aa.states[state].yaw_type) == "jitter" and (ui.get(lavender.ui.aa.states[state].jitter_type) ~= "delayed" or ui.get(lavender.ui.aa.states[state].jitter_type) ~= "flick") then
+    elseif ui.get(lavender.ui.aa.states[state].yaw_type) == "jitter" and (ui.get(lavender.ui.aa.states[state].jitter_type) ~= "delayed" and ui.get(lavender.ui.aa.states[state].jitter_type) ~= "flick") then
         ui.set(lavender.refs.aa.yaw_offset, chokerev(ui.get(lavender.ui.aa.states[state].yaw_offset_left), ui.get(lavender.ui.aa.states[state].yaw_offset_right)))
-    --elseif ui.get(lavender.ui.aa.states[state].yaw_type) == "synchronized" and (ui.get(lavender.ui.aa.states[state].jitter_type) ~= "delayed" or ui.get(lavender.ui.aa.states[state].jitter_type) ~= "flick") then
+    --elseif ui.get(lavender.ui.aa.states[state].yaw_type) == "synchronized" and (ui.get(lavender.ui.aa.states[state].jitter_type) ~= "delayed" and ui.get(lavender.ui.aa.states[state].jitter_type) ~= "flick") then
     --    ui.set(lavender.refs.aa.yaw_offset, globals.tickcount() % 3 == 0 and ui.get(lavender.ui.aa.states[state].yaw_offset_left) or ui.get(lavender.ui.aa.states[state].yaw_offset_right))
     end
 
@@ -2822,7 +2828,13 @@ client.set_event_callback("setup_command", function(c)
 
     local tickbase = entity.get_prop(entity.get_local_player(), "m_nTickBase")
 
-    ui.set(lavender.refs.aa.pitch, ui.get(stage[set_stage].pitch))
+    local stage_pitch_choice = ui.get(stage[set_stage].pitch)
+    if stage_pitch_choice == "custom" then
+        ui.set(lavender.refs.aa.pitch, "custom")
+        ui.set(lavender.refs.aa.pitch_custom, ui.get(stage[set_stage].pitch_custom))
+    else
+        ui.set(lavender.refs.aa.pitch, stage_pitch_choice)
+    end
     ui.set(lavender.refs.aa.yaw_base, ui.get(stage[set_stage].yaw_base))
     ui.set(lavender.refs.aa.yaw, ui.get(stage[set_stage].yaw))
     ui.set(lavender.refs.aa.yaw_jitter, ui.get(stage[set_stage].yaw_jitter))
@@ -3360,51 +3372,43 @@ end
 
 function resolver:get_max_body_yaw(ent)
 
-    local max_body_yaw = 180/math.pi
+    -- Use animstate-derived feet yaw delta as the upper bound
+    local max_body_yaw = self:get_player_max_feet_yaw(ent) or 60
 
-    local body_yaw = max_body_yaw
+    -- Clamp to sane resolver range
+    if max_body_yaw < 0 then max_body_yaw = 0 end
+    if max_body_yaw > 60 then max_body_yaw = 60 end
 
     local last_body_yaw = self.last_body_yaw[ent]
-
     if last_body_yaw == nil then
         last_body_yaw = max_body_yaw
     end
 
-    local vel = lavender.funcs.aa.get_velocity(ent)
-
+    local vel = lavender.funcs.aa.get_velocity(ent) or 0
     local max_velocity = 260
 
     local weapon_ent = entity.get_player_weapon(ent)
-
     if weapon_ent ~= nil then
-
         local weapon = csgo_weapons(weapon_ent)
-
         if weapon ~= nil then
-
             max_velocity = weapon.max_player_speed
-
         end
-
     end
 
-    if jumping then
-
+    local in_air = lavender.funcs.aa.in_air(ent)
+    local body_yaw
+    if in_air then
         if vel < 130 then
-
             body_yaw = lavender.funcs.aa.approach_angle(last_body_yaw, max_body_yaw)
-
         else
-
-            body_yaw = lavender.funcs.aa.approach_angle(last_body_yaw, max_body_yaw/2)
-
+            body_yaw = lavender.funcs.aa.approach_angle(last_body_yaw, max_body_yaw / 2)
         end
-
     else
-
-        body_yaw = max_body_yaw - (math.min(vel,max_velocity)/(max_velocity*2) * max_body_yaw)
-
+        body_yaw = max_body_yaw - (math.min(vel, max_velocity) / (max_velocity * 2) * max_body_yaw)
     end
+
+    -- Persist for smoothing across frames
+    self.last_body_yaw[ent] = body_yaw
 
     return body_yaw
 
@@ -3600,22 +3604,11 @@ function resolver:on_net_update_end()
 end
 
 function resolver:on_miss(shot)
-
-
-
-    if shot.reason ~= "?" then 
-        return
-	end
-
-    if shot.target == nil then
+    if shot == nil or shot.target == nil then
         return
     end
-
     local miss_count = self.data.missed_shots[shot.target] or 0
-
     self.data.missed_shots[shot.target] = miss_count + 1
-
-
 end
 
 function resolver:on_round_start()
@@ -3627,11 +3620,13 @@ end
 
 
 client.set_event_callback("aim_miss", function(shot)
-   
-   -- resolver:on_miss(shot)
+    resolver:on_miss(shot)
+end)
 
-
-
+client.set_event_callback("aim_hit", function(shot)
+    if shot ~= nil and shot.target ~= nil then
+        resolver.data.missed_shots[shot.target] = 0
+    end
 end)
 
 client.set_event_callback("round_start", function()
@@ -3742,10 +3737,18 @@ client.set_event_callback("setup_command", function(cmd)
 
     lavender.handlers.aa.anti_brute(cmd)
 
+    -- Tick-resolver on net update end as well
     if lavender.funcs.check_build("private") then
         resolver:on_net_update_end()
     end
 
+end)
+
+-- Keep resolver updated on net_update_end explicitly
+client.set_event_callback("net_update_end", function()
+    if lavender.funcs.check_build("private") then
+        resolver:on_net_update_end()
+    end
 end)
 
 client.set_event_callback("paint", function()
