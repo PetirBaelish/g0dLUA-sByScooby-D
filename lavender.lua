@@ -618,11 +618,15 @@ lavender.funcs = {
             return damage > 0
         
         end),
-        approach_angle = LPH_NO_VIRTUALIZE(function(angle, target)
+        approach_angle = LPH_NO_VIRTUALIZE(function(angle, target, step)
+            -- Robust smoothing towards a target angle with optional step size
+            angle = tonumber(angle) or 0
+            target = tonumber(target) or 0
+            step = tonumber(step) or 1
             if angle < target then
-                return math.min(angle + 1, target)
+                return math.min(angle + step, target)
             elseif angle > target then
-                return math.max(angle - 1, target)
+                return math.max(angle - step, target)
             else
                 return target
             end
@@ -1479,10 +1483,10 @@ for k, v in pairs(lavender.antiaim.states) do
 
     lavender.ui.aa.states[v].pitch                  = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch", {"off", "default", "up", "down", "minimal", "random", "custom", "custom 3"}), function() return show() end, true)
     lavender.ui.aa.states[v].pitch_custom           = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch custom", -89, 89, 0, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom" end, true)
-    lavender.ui.aa.states[v].pitch_custom3_mode     = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› angel mode", {"cycle", "random", "angle 1", "angle 2", "angle 3"}), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom 3" end, true)
-    lavender.ui.aa.states[v].pitch_custom3_a1       = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch angel 1", -89, 89, 0, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom 3" end, true)
-    lavender.ui.aa.states[v].pitch_custom3_a2       = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch angel 2", -89, 89, 0, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom 3" end, true)
-    lavender.ui.aa.states[v].pitch_custom3_a3       = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch angel 3", -89, 89, 0, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom 3" end, true)
+    lavender.ui.aa.states[v].pitch_custom3_mode     = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› angel mode", {"cycle", "cycle @ 2", "cycle @ 3", "random", "angle 1", "angle 2", "angle 3"}), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom 3" end, true)
+    lavender.ui.aa.states[v].pitch_custom3_a1       = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch angle 1", -89, 89, 0, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom 3" end, true)
+    lavender.ui.aa.states[v].pitch_custom3_a2       = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch angle 2", -89, 89, 0, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom 3" end, true)
+    lavender.ui.aa.states[v].pitch_custom3_a3       = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch angle 3", -89, 89, 0, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom 3" end, true)
     lavender.ui.aa.states[v].yaw_base               = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› yaw \aB9BEFFFFbase", {"local view", "at targets"}), function() return show() end, true)
     lavender.ui.aa.states[v].yaw                    = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› yaw", {"off", "180", "spin", "static", "180 z", "crosshair"}), function() return show() end, true)
     lavender.ui.aa.states[v].jitter_type            = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› jitter type", {"default", "delayed", "flick"}), function() return show() and ui.get(lavender.ui.aa.states[v].yaw) ~= "off" end, true)
@@ -1525,7 +1529,7 @@ for i,v in pairs(stages) do
     stage[v].master = lavender.handlers.ui.new(ui.new_checkbox("AA", "Anti-aimbot angles", "‹\aB9BEFFFFenable\aCDCDCDFF› stage \aB9BEFFFF" .. v), function() return lavender.ui.current_tab == "ANTIAIM" and ui.get(lavender.ui.aa.selection) == "anti-bruteforce" and ui.get(lavender.ui.aa.antibrute_master) and ui.get(lavender.ui.aa.stage) == v end, true)
     local show = function() return lavender.ui.current_tab == "ANTIAIM" and ui.get(lavender.ui.aa.selection) == "anti-bruteforce" and ui.get(lavender.ui.aa.antibrute_master) and ui.get(lavender.ui.aa.stage) == v and ui.get(stage[v].master) end
 
-    stage[v].pitch             = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "‹\aB9BEFFFFstage " .. v ..  "\aCDCDCDFF› pitch", {"off", "default", "up", "down", "minimal", "random", "custom"}), function() return show() end, true)
+    stage[v].pitch             = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "‹\aB9BEFFFFstage " .. v ..  "\aCDCDCDFF› pitch", {"off", "default", "up", "down", "minimal", "random", "custom", "custom 3"}), function() return show() end, true)
     stage[v].pitch_custom      = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles", "‹\aB9BEFFFFstage " .. v ..  "\aCDCDCDFF› pitch custom", -89, 89, 0, true, "°"), function() return show() and ui.get(stage[v].pitch) == "custom" end, true)
     stage[v].yaw_base          = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "‹\aB9BEFFFFstage " .. v ..  "\aCDCDCDFF› yaw \aB9BEFFFFbase", {"local view", "at targets"}), function() return show() end, true)
     stage[v].yaw               = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "‹\aB9BEFFFFstage " .. v ..  "\aCDCDCDFF› yaw", {"off", "180", "spin", "static", "180 z", "crosshair"}), function() return show() end, true)
@@ -2559,12 +2563,29 @@ client.set_event_callback("setup_command", function(cmd)
             local a2 = ui.get(lavender.ui.aa.states[state].pitch_custom3_a2)
             local a3 = ui.get(lavender.ui.aa.states[state].pitch_custom3_a3)
             local chosen = a1
-            if mode == "cycle" then
-                local idx = (globals.tickcount() % 3)
-                chosen = (idx == 0 and a1) or (idx == 1 and a2) or a3
+            if mode == "cycle" or mode == "cycle @ 2" or mode == "cycle @ 3" then
+                local modv = (mode == "cycle" and 3) or (mode == "cycle @ 2" and 2) or 3
+                local idx = (globals.tickcount() % modv)
+                if modv == 2 then
+                    chosen = (idx == 0) and a1 or a2
+                else
+                    if idx == 0 then
+                        chosen = a1
+                    elseif idx == 1 then
+                        chosen = a2
+                    else
+                        chosen = a3
+                    end
+                end
             elseif mode == "random" then
                 local r = client.random_int(1, 3)
-                chosen = (r == 1 and a1) or (r == 2 and a2) or a3
+                if r == 1 then
+                    chosen = a1
+                elseif r == 2 then
+                    chosen = a2
+                else
+                    chosen = a3
+                end
             elseif mode == "angle 1" then
                 chosen = a1
             elseif mode == "angle 2" then
@@ -2859,17 +2880,35 @@ client.set_event_callback("setup_command", function(c)
         ui.set(lavender.refs.aa.pitch, "custom")
         ui.set(lavender.refs.aa.pitch_custom, ui.get(stage[set_stage].pitch_custom))
     elseif stage_pitch_choice == "custom 3" then
-        local mode = ui.get(lavender.ui.aa.states[ui.get(lavender.ui.aa.state)].pitch_custom3_mode)
-        local a1 = ui.get(lavender.ui.aa.states[ui.get(lavender.ui.aa.state)].pitch_custom3_a1)
-        local a2 = ui.get(lavender.ui.aa.states[ui.get(lavender.ui.aa.state)].pitch_custom3_a2)
-        local a3 = ui.get(lavender.ui.aa.states[ui.get(lavender.ui.aa.state)].pitch_custom3_a3)
+        local state = ui.get(lavender.ui.aa.state)
+        local mode = ui.get(lavender.ui.aa.states[state].pitch_custom3_mode)
+        local a1 = ui.get(lavender.ui.aa.states[state].pitch_custom3_a1)
+        local a2 = ui.get(lavender.ui.aa.states[state].pitch_custom3_a2)
+        local a3 = ui.get(lavender.ui.aa.states[state].pitch_custom3_a3)
         local chosen = a1
-        if mode == "cycle" then
-            local idx = (globals.tickcount() % 3)
-            chosen = (idx == 0 and a1) or (idx == 1 and a2) or a3
+        if mode == "cycle" or mode == "cycle @ 2" or mode == "cycle @ 3" then
+            local modv = (mode == "cycle" and 3) or (mode == "cycle @ 2" and 2) or 3
+            local idx = (globals.tickcount() % modv)
+            if modv == 2 then
+                chosen = (idx == 0) and a1 or a2
+            else
+                if idx == 0 then
+                    chosen = a1
+                elseif idx == 1 then
+                    chosen = a2
+                else
+                    chosen = a3
+                end
+            end
         elseif mode == "random" then
             local r = client.random_int(1, 3)
-            chosen = (r == 1 and a1) or (r == 2 and a2) or a3
+            if r == 1 then
+                chosen = a1
+            elseif r == 2 then
+                chosen = a2
+            else
+                chosen = a3
+            end
         elseif mode == "angle 1" then
             chosen = a1
         elseif mode == "angle 2" then
@@ -3403,6 +3442,9 @@ end
 
 function resolver:get_player_max_feet_yaw(_Entity)
     local S_animationState_t = self:GetAnimationState(_Entity)
+    if not S_animationState_t then
+        return 60
+    end
     local nDuckAmount = S_animationState_t.m_fDuckAmount
     local nFeetSpeedForwardsOrSideWays = math.max(0, math.min(1, S_animationState_t.m_flFeetSpeedForwardsOrSideWays))
     local nFeetSpeedUnknownForwardOrSideways = math.max(1, S_animationState_t.m_flFeetSpeedUnknownForwardOrSideways)
@@ -3426,7 +3468,7 @@ function resolver:get_max_body_yaw(ent)
     if max_body_yaw > 60 then max_body_yaw = 60 end
 
     local last_body_yaw = self.last_body_yaw[ent]
-    if last_body_yaw == nil then
+    if last_body_yaw == nil or type(last_body_yaw) ~= 'number' then
         last_body_yaw = max_body_yaw
     end
 
@@ -3436,7 +3478,7 @@ function resolver:get_max_body_yaw(ent)
     local weapon_ent = entity.get_player_weapon(ent)
     if weapon_ent ~= nil then
         local weapon = csgo_weapons(weapon_ent)
-        if weapon ~= nil then
+        if weapon ~= nil and weapon.max_player_speed ~= nil then
             max_velocity = weapon.max_player_speed
         end
     end
@@ -3445,16 +3487,16 @@ function resolver:get_max_body_yaw(ent)
     local body_yaw
     if in_air then
         if vel < 130 then
-            body_yaw = lavender.funcs.aa.approach_angle(last_body_yaw, max_body_yaw)
+            body_yaw = lavender.funcs.aa.approach_angle(last_body_yaw, max_body_yaw, 2)
         else
-            body_yaw = lavender.funcs.aa.approach_angle(last_body_yaw, max_body_yaw / 2)
+            body_yaw = lavender.funcs.aa.approach_angle(last_body_yaw, max_body_yaw / 2, 3)
         end
     else
         body_yaw = max_body_yaw - (math.min(vel, max_velocity) / (max_velocity * 2) * max_body_yaw)
     end
 
     -- Persist for smoothing across frames
-    self.last_body_yaw[ent] = body_yaw
+    self.last_body_yaw[ent] = tonumber(body_yaw) or max_body_yaw
 
     return body_yaw
 
@@ -3607,7 +3649,7 @@ function resolver:on_net_update_end()
 
         end
 
-        if self.data.missed_shots[ent] ~= nil and self.data.missed_shots[ent] <= 4 then
+    if (self.data.missed_shots[ent] or 0) ~= nil and (self.data.missed_shots[ent] or 0) <= 4 then
 
             if self.data.missed_shots[ent] == 1 and self.data.missed_shots[ent] ~= self.old_data.missed_shots[ent] then
 
@@ -3624,7 +3666,12 @@ function resolver:on_net_update_end()
 
             self.mode[ent] = "BRUTE"
 
-            body_yaw = self.data.missed_body_yaw[ent] == 0 and -stages[self.data.missed_shots[ent]] or stages[self.data.missed_shots[ent]]
+            local stage_index = (self.data.missed_shots[ent] or 1)
+            if stage_index < 1 then stage_index = 1 end
+            if stage_index > #stages then stage_index = #stages end
+            local missed_side = self.data.missed_body_yaw[ent]
+            if missed_side == nil then missed_side = 1 end
+            body_yaw = missed_side == 0 and -stages[stage_index] or stages[stage_index]
             side = 1
 
         elseif self.data.missed_shots[ent] or 0 > 4 then
