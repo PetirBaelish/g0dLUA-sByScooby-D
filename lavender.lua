@@ -418,12 +418,10 @@ lavender.funcs = {
         end),
         is_crouching = LPH_NO_VIRTUALIZE(function(player)
             local flags = entity.get_prop(player, "m_fFlags")
-            
-            if bit.band(flags, 4) == 4 then
-                return true
+            if flags == nil then
+                return false
             end
-            
-            return false
+            return bit.band(flags, 4) == 4
         end),
         
         get_state = LPH_NO_VIRTUALIZE(function(me)
@@ -619,17 +617,28 @@ lavender.funcs = {
         
         end),
         approach_angle = LPH_NO_VIRTUALIZE(function(angle, target, step)
-            -- Robust smoothing towards a target angle with optional step size
+            -- Smoothly approach target along the shortest angular path with wrap-around handling
             angle = tonumber(angle) or 0
             target = tonumber(target) or 0
-            step = tonumber(step) or 1
-            if angle < target then
-                return math.min(angle + step, target)
-            elseif angle > target then
-                return math.max(angle - step, target)
-            else
+            step = math.abs(tonumber(step) or 1)
+
+            -- Compute shortest signed delta in degrees (-180..180]
+            local delta = (target - angle) % 360
+            if delta > 180 then delta = delta - 360 end
+
+            if math.abs(delta) <= step then
                 return target
             end
+
+            if delta > 0 then
+                angle = angle + step
+            else
+                angle = angle - step
+            end
+
+            -- Normalize to [-180, 180)
+            angle = ((angle + 180) % 360) - 180
+            return angle
         end),
         hit_flag = LPH_JIT(function(ent)
 
