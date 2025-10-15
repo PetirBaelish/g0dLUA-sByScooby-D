@@ -2420,11 +2420,18 @@ client.set_event_callback("aim_miss", function(e)
 	local hgroup = hitgroup_names[e.hitgroup + 1] or '?'
 
     if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "shot log (notify)") then
-        notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_notify_miss_accent)}, "shot_log_miss", "", "lavender", "~ missed due to", e.reason, "(hc: " .. math.floor(e.hit_chance) .. ", aimed: " .. hgroup .. ")")
+        local flag = ""
+        local reason = tostring(e.reason or ""):lower()
+        if reason == "spread" or reason == "?" then
+            flag = " [ignored]"
+        end
+        notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_notify_miss_accent)}, "shot_log_miss", "", "lavender", "~ missed due to", e.reason .. flag, "(hc: " .. math.floor(e.hit_chance) .. ", aimed: " .. hgroup .. ")")
     end
 
     if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "shot log (console)") then
-        lavender.funcs.misc.colour_console({ui.get(lavender.ui.visuals.log_console_accent)}, string.format("missed due to %s (hc: %s, aimed: %s)", e.reason, math.floor(e.hit_chance), hgroup))
+        local reason = tostring(e.reason or ""):lower()
+        local tag = (reason == "spread" or reason == "?") and " [ignored]" or ""
+        lavender.funcs.misc.colour_console({ui.get(lavender.ui.visuals.log_console_accent)}, string.format("missed due to %s%s (hc: %s, aimed: %s)", e.reason, tag, math.floor(e.hit_chance), hgroup))
     end
 
 end)
@@ -3363,6 +3370,12 @@ end)
 
 local resolver = {
     last_body_yaw = {},
+    -- Stores the last resolver value that produced a hit per-entity
+    last_good_body_yaw = {},
+    last_good_side = {},
+    last_good_time = {},
+    -- Tracks ignored misses per-entity (e.g. spread/DT) for diagnostics
+    ignored_misses = {},
     mode = {},
     data = {
         body_yaw = {},
@@ -3441,6 +3454,13 @@ function resolver:clear_data()
         vector_origin = {},
         state = {},
     }
+
+    -- Reset transient resolver memory on round boundaries
+    self.last_body_yaw = {}
+    self.last_good_body_yaw = {}
+    self.last_good_side = {}
+    self.last_good_time = {}
+    self.ignored_misses = {}
 end
 
 function resolver:GetAnimationState(_Entity)
@@ -3535,7 +3555,9 @@ function resolver:get_max_body_yaw(ent)
             body_yaw = approach(last_body_yaw, max_body_yaw / 2, 3)
         end
     else
-        body_yaw = max_body_yaw - (math.min(vel, max_velocity) / (max_velocity * 2) * max_body_yaw)
+        -- Smoothly approach the grounded target instead of snapping to reduce jitter
+        local target_ground_yaw = max_body_yaw - (math.min(vel, max_velocity) / (max_velocity * 2) * max_body_yaw)
+        body_yaw = approach(last_body_yaw, target_ground_yaw, 2)
     end
 
     -- Persist for smoothing across frames
@@ -3612,7 +3634,8 @@ function resolver:on_net_update_end()
         local x, y, z = client.eye_position()
 
         -- Sample a wider arc for better freestanding inference
-        local angles = {-120, -90, -60, -30, 30, 60, 90, 120}
+        -- Include tighter inner samples to reduce hallway bias
+        local angles = {-135, -120, -90, -60, -30, -15, 15, 30, 60, 90, 120, 135}
 
         for i, angle in ipairs(angles) do
 
@@ -3656,17 +3679,17 @@ function resolver:on_net_update_end()
 
         local relative_yaw = normalise_angle(self.data.eye_angles[ent].y - target_yaw)
 
-        if math.abs(relative_yaw) >= 30 and math.abs(relative_yaw) <= 120 then
+        if math.abs(relative_yaw) >= 25 and math.abs(relative_yaw) <= 140 then
 
             side = relative_yaw > 0 and 1 or 0
 
-            if math.abs(relative_yaw) > 90 then
+            if math.abs(relative_yaw) > 100 then
 
                 side = relative_yaw > 0 and 0 or 1
 
-            elseif math.abs(relative_yaw) <= 60 then
-
-                body_yaw = max_body_yaw / 2
+            elseif math.abs(relative_yaw) <= 55 then
+                -- Prefer mid amplitude when alignment suggests yaw tuck
+                body_yaw = approach(body_yaw, max_body_yaw / 2, 2)
 
             end
 
@@ -3730,6 +3753,48 @@ function resolver:on_net_update_end()
 
         self.data.state[ent] = lavender.funcs.aa.get_state(ent)
 
+        -- If side inference failed, bias toward the last successful resolution, if any
+        if side == nil then
+            if self.last_good_side[ent] ~= nil then
+                side = self.last_good_side[ent]
+            else
+                side = 1 -- default bias
+            end
+        end
+
+        -- Clamp body_yaw amplitude and provide fallback to last good value when available and recent
+        local max_body = max_body_yaw or 60
+        if type(body_yaw) ~= 'number' or body_yaw ~= body_yaw then -- NaN check
+            body_yaw = (self.last_good_body_yaw[ent] and math.abs(self.last_good_body_yaw[ent]) or 29)
+        end
+        body_yaw = math.max(0, math.min(math.abs(body_yaw), max_body))
+        do
+            local last_ok_time = self.last_good_time[ent] or 0
+            local recent_ok = (globals.realtime and globals.realtime() or 0) - last_ok_time < 2.0
+            if recent_ok and self.last_good_body_yaw[ent] ~= nil and (self.data.missed_shots[ent] or 0) == 0 then
+                -- Nudge toward the last known good resolver amplitude for stability
+                local approach = lavender.funcs and lavender.funcs.aa and lavender.funcs.aa.approach_angle
+                if type(approach) ~= 'function' then
+                    approach = function(angle, target, step)
+                        angle = tonumber(angle) or 0
+                        target = tonumber(target) or 0
+                        step = math.abs(tonumber(step) or 1)
+                        local delta = (target - angle) % 360
+                        if delta > 180 then delta = delta - 360 end
+                        if math.abs(delta) <= step then
+                            return target
+                        end
+                        if delta > 0 then angle = angle + step else angle = angle - step end
+                        angle = ((angle + 180) % 360) - 180
+                        return angle
+                    end
+                end
+                local current = math.abs(body_yaw)
+                local target = math.abs(self.last_good_body_yaw[ent])
+                body_yaw = math.abs(approach(current, target, 2))
+            end
+        end
+
         self.data.body_yaw[ent] = (side == 0) and - body_yaw or body_yaw
 
         plist.set(ent, "Force body yaw", ui.get(lavender.ui.private.resolver_master) and true or false)
@@ -3748,8 +3813,37 @@ function resolver:on_miss(shot)
     if shot == nil or shot.target == nil then
         return
     end
-    local miss_count = self.data.missed_shots[shot.target] or 0
-    self.data.missed_shots[shot.target] = miss_count + 1
+
+    -- Filter out non-resolver misses (spread, DT tick, prediction issues) to avoid destabilizing resolver state
+    local reason = tostring(shot.reason or ""):lower()
+    if reason == "spread" or reason == "?" or reason == "prediction error" or reason == "occlusion" then
+        self.ignored_misses[shot.target] = (self.ignored_misses[shot.target] or 0) + 1
+        return
+    end
+
+    -- If double tap is currently active, treat miss as non-resolver
+    local dt_active = false
+    if lavender and lavender.refs and lavender.refs.rage and lavender.refs.rage.double_tap and lavender.refs.rage.double_tap_key then
+        local ok, v1, v2 = pcall(function()
+            return ui.get(lavender.refs.rage.double_tap_key), ui.get(lavender.refs.rage.double_tap)
+        end)
+        if ok then
+            dt_active = v1 and v2
+        end
+    end
+    if dt_active then
+        self.ignored_misses[shot.target] = (self.ignored_misses[shot.target] or 0) + 1
+        return
+    end
+
+    -- Only escalate when reason strongly implies wrong resolve
+    if reason:find("resolver", 1, true) or reason:find("desync", 1, true) or reason == "body yaw mismatch" then
+        local miss_count = self.data.missed_shots[shot.target] or 0
+        self.data.missed_shots[shot.target] = miss_count + 1
+    else
+        -- Unknown reasons: don't punish resolver
+        self.ignored_misses[shot.target] = (self.ignored_misses[shot.target] or 0) + 1
+    end
 end
 
 function resolver:on_round_start()
@@ -3769,6 +3863,15 @@ client.set_event_callback("aim_hit", function(shot)
         -- On hit, reset missed counter but keep last mode for continuity
         resolver.data.missed_shots[shot.target] = 0
         resolver.mode[shot.target] = resolver.mode[shot.target] or "STATIC"
+        -- Track last successful resolver settings for stability memory
+        if resolver and resolver.data and resolver.data.body_yaw then
+            local by = resolver.data.body_yaw[shot.target]
+            if type(by) == 'number' then
+                resolver.last_good_body_yaw[shot.target] = by
+                resolver.last_good_side[shot.target] = by < 0 and 0 or 1
+                resolver.last_good_time[shot.target] = globals.realtime and globals.realtime() or 0
+            end
+        end
     end
 end)
 
