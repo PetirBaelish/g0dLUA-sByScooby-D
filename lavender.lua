@@ -2447,7 +2447,8 @@ local killsay_hs = {
     "𝕪𝕠𝕦 𝕛𝕦𝕤𝕥 𝕘𝕠𝕥 𝟙𝕕 𝕗𝕠𝕣 𝟜$",
     "𝕙𝕖𝕒𝕕 𝕡𝕠𝕡 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
     "𝕔𝕝𝕚𝕔𝕜 𝕔𝕝𝕚𝕔𝕜 — 𝕙𝕖𝕒𝕕𝕤𝕙𝕠𝕥",
-    "𝕟𝕖𝕩𝕥 𝕣𝕠𝕦𝕟𝕕, 𝕤𝕒𝕞𝕖 𝕣𝕖𝕤𝕦𝕝𝕥"
+    "𝕟𝕖𝕩𝕥 𝕣𝕠𝕦𝕟𝕕, 𝕤𝕒𝕞𝕖 𝕣𝕖𝕤𝕦𝕝𝕥",
+    "scooby was killed."
 }
 
 local killsay_baim = {
@@ -2457,7 +2458,8 @@ local killsay_baim = {
     "𝕔𝕒𝕟𝕥 𝕙𝕚𝕥??? 𝕃𝔸𝕧𝕖𝕟𝕕𝕖𝕣 𝕝𝕦𝕒",
     "𝕓𝕠𝕕𝕪 𝕤𝕙𝕠𝕥 𝕓𝕦𝕥 𝕨𝕚𝕟 𝕚𝕤 𝕨𝕚𝕟",
     "𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣 𝕓𝕠𝕕𝕪 𝕔𝕠𝕟𝕥𝕣𝕠𝕝 𝕠𝕟",
-    "𝕥𝕠𝕠 𝕤𝕝𝕠𝕨 — 𝕘𝕠𝕥 𝕓𝕒𝕚𝕞 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣"
+    "𝕥𝕠𝕠 𝕤𝕝𝕠𝕨 — 𝕘𝕠𝕥 𝕓𝕒𝕚𝕞 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
+    "scooby was killed."
 }
 
 function trashtalk()
@@ -3689,7 +3691,23 @@ function resolver:on_net_update_end()
 
             elseif math.abs(relative_yaw) <= 55 then
                 -- Prefer mid amplitude when alignment suggests yaw tuck
-                body_yaw = approach(body_yaw, max_body_yaw / 2, 2)
+                local approach_mid = lavender.funcs and lavender.funcs.aa and lavender.funcs.aa.approach_angle
+                if type(approach_mid) ~= 'function' then
+                    approach_mid = function(angle, target, step)
+                        angle = tonumber(angle) or 0
+                        target = tonumber(target) or 0
+                        step = math.abs(tonumber(step) or 1)
+                        local delta = (target - angle) % 360
+                        if delta > 180 then delta = delta - 360 end
+                        if math.abs(delta) <= step then
+                            return target
+                        end
+                        if delta > 0 then angle = angle + step else angle = angle - step end
+                        angle = ((angle + 180) % 360) - 180
+                        return angle
+                    end
+                end
+                body_yaw = approach_mid(body_yaw or 0, max_body_yaw / 2, 2)
 
             end
 
