@@ -1,5 +1,6 @@
 lib_error = function(library)
-    error(string.format("Lavender - failed to retrieve '%s' library. Head over to our discord and subscribe to all the libraries and reload your cheat", library))
+    local brand = (BRAND and BRAND.name) and BRAND.name:gsub("^%l", string.upper) or "Lavender"
+    error(string.format("%s - failed to retrieve '%s' library. Head over to our discord and subscribe to all the libraries and reload your cheat", brand, library))
 end
 
 -- Libraries
@@ -1894,10 +1895,10 @@ lavender.handlers.visuals.indicators = function()
 	if ui.get(lavender.ui.visuals.crosshair_indicator) == "modern" then
         modern_edit = ease.quad_in(0.2, modern_edit, (scoping and 30 or 0) - modern_edit, 1)
 
-        local measure_title = vector(renderer.measure_text("-c", "LAVENDER"))
+    local measure_title = vector(renderer.measure_text("-c", (BRAND.name or "LAVENDER"):upper()))
         local keystate_active = os and not dt and "OS" or dt and not fd and "DT" or fd and "FD" or ""
 
-        renderer.text(lavender.pos.modern.x + modern_edit, lavender.pos.modern.y + 25, main_acc[1], main_acc[2], main_acc[3], main_acc[4], "-c", 0, lavender.funcs.renderer.gradient_text(main_acc[1], main_acc[2], main_acc[3], main_acc[4], "LAVENDER", 2.42, trail_accent[1], trail_accent[2], trail_accent[3], trail_accent[4]))
+        renderer.text(lavender.pos.modern.x + modern_edit, lavender.pos.modern.y + 25, main_acc[1], main_acc[2], main_acc[3], main_acc[4], "-c", 0, lavender.funcs.renderer.gradient_text(main_acc[1], main_acc[2], main_acc[3], main_acc[4], (BRAND.name or "LAVENDER"):upper(), 2.42, trail_accent[1], trail_accent[2], trail_accent[3], trail_accent[4]))
         renderer.text(lavender.pos.modern.x + modern_edit, lavender.pos.modern.y + 25 + measure_title.y, state_acc[1], state_acc[2], state_acc[3], 255, "-c", 0, state:upper())
         renderer.text(lavender.pos.modern.x + modern_edit, lavender.pos.modern.y + 25 + (measure_title.y * 2), keystate_acc[1], keystate_acc[2], keystate_acc[3], 255, "-c", 0, keystate_active)
 
@@ -2469,16 +2470,22 @@ client.set_event_callback("aim_miss", function(e)
 
 end)
 
+local function brand_inject(text)
+    local name = tostring(BRAND.name or "lavender")
+    local domain = tostring(BRAND.domain or name)
+    return text:gsub("[Ll]avender%.pub", domain):gsub("[Ll]avender", name)
+end
+
 local killsay_hs = {
-    "𝕪𝕦𝕠 𝕘𝕠𝕥 𝕙𝕖𝕒𝕕𝕖𝕕 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
-    "𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣 𝕥𝕠𝕠 𝕤𝕥𝕣𝕠𝕟𝕜 𝕗𝕠𝕣 𝕖𝕟𝕖𝕞𝕪",
-    "𝕨𝕙𝕪 𝕞𝕚𝕤𝕤? 𝕓𝕖𝕔𝕒𝕦𝕤𝕖 𝕒𝕞 𝕦𝕤𝕖 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
+    brand_inject("𝕪𝕦𝕠 𝕘𝕠𝕥 𝕙𝕖𝕒𝕕𝕖𝕕 𝕓𝕪 lavender"),
+    brand_inject("𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣 𝕥𝕠𝕠 𝕤𝕥𝕣𝕠𝕟𝕜 𝕗𝕠𝕣 𝕖𝕟𝕖𝕞𝕪"),
+    brand_inject("𝕨𝕙𝕪 𝕞𝕚𝕤𝕤? 𝕓𝕖𝕔𝕒𝕦𝕤𝕖 𝕒𝕞 𝕦𝕤𝕖 lavender"),
     "𝕥𝕣𝕪 𝕙𝕚𝕥 𝕞𝕖 𝕙𝕖𝕒𝕕",
-    "𝕪𝕦 𝕒𝕣𝕖'𝕣𝕖 𝕘𝕠𝕥 ℝ𝔼𝕊𝕤𝕠𝕝𝕧 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
-    "𝕒𝕞 𝕘𝕖𝕥 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣 𝕥𝕒𝕡",
-    "𝕌 𝕒ℝ𝔼 𝔾𝕆𝕋 𝕙𝕚𝕥 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
+    brand_inject("𝕪𝕦 𝕒𝕣𝕖'𝕣𝕖 𝕘𝕠𝕥 ℝ𝔼𝕊𝕤𝕠𝕝𝕧 𝕓𝕪 lavender"),
+    brand_inject("𝕒𝕞 𝕘𝕖𝕥 lavender 𝕥𝕒𝕡"),
+    brand_inject("𝕌 𝕒ℝ𝔼 𝔾𝕆𝕋 𝕙𝕚𝕥 𝕓𝕪 lavender"),
     "𝕪𝕠𝕦 𝕛𝕦𝕤𝕥 𝕘𝕠𝕥 𝟙𝕕 𝕗𝕠𝕣 𝟜$",
-    "𝕙𝕖𝕒𝕕 𝕡𝕠𝕡 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
+    brand_inject("𝕙𝕖𝕒𝕕 𝕡𝕠𝕡 𝕓𝕪 lavender"),
     "𝕔𝕝𝕚𝕔𝕜 𝕔𝕝𝕚𝕔𝕜 — 𝕙𝕖𝕒𝕕𝕤𝕙𝕠𝕥",
     "𝕟𝕖𝕩𝕥 𝕣𝕠𝕦𝕟𝕕, 𝕤𝕒𝕞𝕖 𝕣𝕖𝕤𝕦𝕝𝕥",
     "scooby was killed."
@@ -2486,12 +2493,12 @@ local killsay_hs = {
 
 local killsay_baim = {
     "𝕌 𝕒ℝ𝔼 𝔸ℝ𝔼 𝕋ℝ𝕐 𝕎𝕀ℕℕ𝕀ℕ𝔾 𝕄𝔼?",
-    "𝕪𝕠𝕦𝕣'𝕣𝕖 𝕒𝕣𝕖 𝕘𝕠𝕥 𝕕𝕖𝕒𝕕𝕖𝕕 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
+    brand_inject("𝕪𝕠𝕦𝕣'𝕣𝕖 𝕒𝕣𝕖 𝕘𝕠𝕥 𝕕𝕖𝕒𝕕𝕖𝕕 𝕓𝕪 lavender"),
     "𝕚 𝕒𝕞 𝕦𝕤𝕖 𝕓𝕖𝕤𝕥 𝕒𝕟𝕥𝕚𝕒𝕚𝕞 𝕝𝕦𝕒",
-    "𝕔𝕒𝕟𝕥 𝕙𝕚𝕥??? 𝕃𝔸𝕧𝕖𝕟𝕕𝕖𝕣 𝕝𝕦𝕒",
+    brand_inject("𝕔𝕒𝕟𝕥 𝕙𝕚𝕥??? Lavender lua"),
     "𝕓𝕠𝕕𝕪 𝕤𝕙𝕠𝕥 𝕓𝕦𝕥 𝕨𝕚𝕟 𝕚𝕤 𝕨𝕚𝕟",
-    "𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣 𝕓𝕠𝕕𝕪 𝕔𝕠𝕟𝕥𝕣𝕠𝕝 𝕠𝕟",
-    "𝕥𝕠𝕠 𝕤𝕝𝕠𝕨 — 𝕘𝕠𝕥 𝕓𝕒𝕚𝕞 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
+    brand_inject("lavender 𝕓𝕠𝕕𝕪 𝕔𝕠𝕟𝕥𝕣𝕠𝕝 𝕠𝕟"),
+    brand_inject("𝕥𝕠𝕠 𝕤𝕝𝕠𝕨 — 𝕘𝕠𝕥 𝕓𝕒𝕚𝕞 𝕓𝕪 lavender"),
     "scooby was killed."
 }
 
