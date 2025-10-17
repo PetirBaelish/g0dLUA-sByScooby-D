@@ -1,5 +1,6 @@
 lib_error = function(library)
-    error(string.format("Lavender - failed to retrieve '%s' library. Head over to our discord and subscribe to all the libraries and reload your cheat", library))
+    local brand = (BRAND and BRAND.name) and BRAND.name:gsub("^%l", string.upper) or "Lavender"
+    error(string.format("%s - failed to retrieve '%s' library. Head over to our discord and subscribe to all the libraries and reload your cheat", brand, library))
 end
 
 -- Libraries
@@ -130,12 +131,40 @@ local function get_anim_layer(b,c)c=c or 1;b=ffi.cast(classptr,b)return ffi.cast
 -- Main
 local lavender = {}
 
+-- Centralized branding config for all user-facing strings
+local BRAND = {
+    name = "lavender",             -- project/display name
+    domain = "lavender.pub",        -- watermark/clantag domain (or set to name)
+    console_prefix = "lavender",    -- console/notify label prefix
+    db_namespace = ":lavender:",    -- database namespace prefix
+    esp_tag = "LAVENDER",           -- ESP flag tag
+    suppressIgnoredMissLogs = true   -- hide logs for spread/?/prediction error/occlusion
+}
+
+local function brand_console_prefix()
+    return tostring(BRAND.console_prefix or BRAND.name) .. " ~ \0"
+end
+
+local function brand_db_key(suffix)
+    return tostring(BRAND.db_namespace or (":" .. (BRAND.name or "lavender") .. ":")) .. ":" .. suffix .. ":"
+end
+
+local function brand_domain_parts()
+    local name = tostring(BRAND.name or "lavender")
+    local domain = tostring(BRAND.domain or name)
+    local suffix = domain
+    if domain:sub(1, #name) == name then
+        suffix = domain:sub(#name + 1)
+    end
+    return name, suffix
+end
+
 lavender.presets = { }
 
 lavender.database = {
-    configs = ":lavender::configs:",
-    locations = ":lavender::locations:",
-    last_config = ":lavender::last_config:"
+    configs = brand_db_key("configs"),
+    locations = brand_db_key("locations"),
+    last_config = brand_db_key("last_config")
 }
 
 lavender.ui = {
@@ -535,7 +564,7 @@ lavender.funcs = {
             return result
         end),
         colour_console = LPH_JIT(function(prefix, string)
-            client.color_log(prefix[1], prefix[2], prefix[3], "lavender ~ \0")
+            client.color_log(prefix[1], prefix[2], prefix[3], brand_console_prefix())
             client.color_log(255, 255, 232, string)
         end),
         can_hit_enemy = LPH_NO_VIRTUALIZE(function(target, ticks, head_only)
@@ -1351,7 +1380,7 @@ function startup()
     "  := .%: :#*   -+-:+:                              ",
     "   #  :+  #  :+. .=+=*                             ",
     " -+    *  * -=  =-  +:                             ",
-    " #     -=:*++  =-   *.         Welcome to Lavender, " .. username,
+    " #     -=:*++  =-   *.         Welcome to " .. (BRAND.name or "lavender"):gsub("^%l", string.upper) .. ", " .. username,
     " :=-:==+%=  #==*   :+:         You have, " .. build .. " access.",
     "    -+  *: *. .*===+           version loaded: " .. version,
     "  +-*-   #.+   *.  #           Any questions or issues, Create a ticket via our Discord",
@@ -1434,7 +1463,8 @@ lavender.handlers.control_animation_main = function()
     if lavender.ui.current_tab ~= "HOME" then
         ui.set(lavender.ui.tab_visualize, lavender.funcs.renderer.colour_text_menu("• ") .. "selected tab: " .. lavender.funcs.renderer.two_gradient_text(cur_tab, colour[1], colour[2], colour[3], 15))
     else
-        ui.set(lavender.ui.tab_visualize, lavender.funcs.renderer.colour_text_menu("• ") .. "welcome to " .. lavender.funcs.renderer.two_gradient_text("lavender.pub", colour[1], colour[2], colour[3], 6))
+        local n, s = brand_domain_parts()
+        ui.set(lavender.ui.tab_visualize, lavender.funcs.renderer.colour_text_menu("• ") .. "welcome to " .. lavender.funcs.renderer.two_gradient_text(n .. s, colour[1], colour[2], colour[3], 6))
     end
 end
 
@@ -1865,10 +1895,10 @@ lavender.handlers.visuals.indicators = function()
 	if ui.get(lavender.ui.visuals.crosshair_indicator) == "modern" then
         modern_edit = ease.quad_in(0.2, modern_edit, (scoping and 30 or 0) - modern_edit, 1)
 
-        local measure_title = vector(renderer.measure_text("-c", "LAVENDER"))
+    local measure_title = vector(renderer.measure_text("-c", (BRAND.name or "LAVENDER"):upper()))
         local keystate_active = os and not dt and "OS" or dt and not fd and "DT" or fd and "FD" or ""
 
-        renderer.text(lavender.pos.modern.x + modern_edit, lavender.pos.modern.y + 25, main_acc[1], main_acc[2], main_acc[3], main_acc[4], "-c", 0, lavender.funcs.renderer.gradient_text(main_acc[1], main_acc[2], main_acc[3], main_acc[4], "LAVENDER", 2.42, trail_accent[1], trail_accent[2], trail_accent[3], trail_accent[4]))
+        renderer.text(lavender.pos.modern.x + modern_edit, lavender.pos.modern.y + 25, main_acc[1], main_acc[2], main_acc[3], main_acc[4], "-c", 0, lavender.funcs.renderer.gradient_text(main_acc[1], main_acc[2], main_acc[3], main_acc[4], (BRAND.name or "LAVENDER"):upper(), 2.42, trail_accent[1], trail_accent[2], trail_accent[3], trail_accent[4]))
         renderer.text(lavender.pos.modern.x + modern_edit, lavender.pos.modern.y + 25 + measure_title.y, state_acc[1], state_acc[2], state_acc[3], 255, "-c", 0, state:upper())
         renderer.text(lavender.pos.modern.x + modern_edit, lavender.pos.modern.y + 25 + (measure_title.y * 2), keystate_acc[1], keystate_acc[2], keystate_acc[3], 255, "-c", 0, keystate_active)
 
@@ -2082,7 +2112,8 @@ lavender.handlers.visuals.watermark = function()
     local r, g, b = ui.get(colour)
     local hour, minute, second, mill = client.system_time()
     local hr, m, s = string.format("%02d", hour), string.format("%02d", minute), string.format("%02d", second)
-    local string = "lavender".. lavender.funcs.renderer.colour_text(".pub", colour) .. " [" .. build .. "] | " .. lavender.funcs.renderer.colour_text(username, colour) .. " | " .. lavender.funcs.renderer.colour_text(hr, colour) .. ":" .. lavender.funcs.renderer.colour_text(m, colour) .. ":" .. lavender.funcs.renderer.colour_text(s, colour)
+    local brand_name, brand_suffix = brand_domain_parts()
+    local string = brand_name .. lavender.funcs.renderer.colour_text(brand_suffix, colour) .. " [" .. build .. "] | " .. lavender.funcs.renderer.colour_text(username, colour) .. " | " .. lavender.funcs.renderer.colour_text(hr, colour) .. ":" .. lavender.funcs.renderer.colour_text(m, colour) .. ":" .. lavender.funcs.renderer.colour_text(s, colour)
     local measure_string = vector(renderer.measure_text("", string .. "   "))
     local h = 25
     local w = measure_string.x + 10
@@ -2408,7 +2439,7 @@ local hitgroup_names = {'generic', 'head', 'chest', 'stomach', 'left arm', 'righ
 client.set_event_callback("aim_hit", function(e)
 	local hgroup = hitgroup_names[e.hitgroup + 1] or '?'
     if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "shot log (notify)") then
-        notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_notify_hit_accent)}, "shot_log_hit", "", "lavender", "~ hit", entity.get_player_name(e.target), "for", e.damage, "in", hgroup)
+        notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_notify_hit_accent)}, "shot_log_hit", "", BRAND.console_prefix or "lavender", "~ hit", entity.get_player_name(e.target), "for", e.damage, "in", hgroup)
     end
 
     if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "shot log (console)") then
@@ -2419,33 +2450,42 @@ end)
 client.set_event_callback("aim_miss", function(e)
 	local hgroup = hitgroup_names[e.hitgroup + 1] or '?'
 
-    if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "shot log (notify)") then
-        local flag = ""
+    do
         local reason = tostring(e.reason or ""):lower()
-        if reason == "spread" or reason == "?" then
-            flag = " [ignored]"
+        local is_ignored = (reason == "spread" or reason == "?" or reason == "prediction error" or reason == "occlusion")
+        if not (BRAND.suppressIgnoredMissLogs and is_ignored) and lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "shot log (notify)") then
+            local flag = (reason == "spread" or reason == "?") and " [ignored]" or ""
+            notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_notify_miss_accent)}, "shot_log_miss", "", BRAND.console_prefix or "lavender", "~ missed due to", e.reason .. flag, "(hc: " .. math.floor(e.hit_chance) .. ", aimed: " .. hgroup .. ")")
         end
-        notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_notify_miss_accent)}, "shot_log_miss", "", "lavender", "~ missed due to", e.reason .. flag, "(hc: " .. math.floor(e.hit_chance) .. ", aimed: " .. hgroup .. ")")
     end
 
-    if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "shot log (console)") then
+    do
         local reason = tostring(e.reason or ""):lower()
-        local tag = (reason == "spread" or reason == "?") and " [ignored]" or ""
-        lavender.funcs.misc.colour_console({ui.get(lavender.ui.visuals.log_console_accent)}, string.format("missed due to %s%s (hc: %s, aimed: %s)", e.reason, tag, math.floor(e.hit_chance), hgroup))
+        local is_ignored = (reason == "spread" or reason == "?" or reason == "prediction error" or reason == "occlusion")
+        if not (BRAND.suppressIgnoredMissLogs and is_ignored) and lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "shot log (console)") then
+            local tag = (reason == "spread" or reason == "?") and " [ignored]" or ""
+            lavender.funcs.misc.colour_console({ui.get(lavender.ui.visuals.log_console_accent)}, string.format("missed due to %s%s (hc: %s, aimed: %s)", e.reason, tag, math.floor(e.hit_chance), hgroup))
+        end
     end
 
 end)
 
+local function brand_inject(text)
+    local name = tostring(BRAND.name or "lavender")
+    local domain = tostring(BRAND.domain or name)
+    return text:gsub("[Ll]avender%.pub", domain):gsub("[Ll]avender", name)
+end
+
 local killsay_hs = {
-    "𝕪𝕦𝕠 𝕘𝕠𝕥 𝕙𝕖𝕒𝕕𝕖𝕕 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
-    "𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣 𝕥𝕠𝕠 𝕤𝕥𝕣𝕠𝕟𝕜 𝕗𝕠𝕣 𝕖𝕟𝕖𝕞𝕪",
-    "𝕨𝕙𝕪 𝕞𝕚𝕤𝕤? 𝕓𝕖𝕔𝕒𝕦𝕤𝕖 𝕒𝕞 𝕦𝕤𝕖 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
+    brand_inject("𝕪𝕦𝕠 𝕘𝕠𝕥 𝕙𝕖𝕒𝕕𝕖𝕕 𝕓𝕪 lavender"),
+    brand_inject("𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣 𝕥𝕠𝕠 𝕤𝕥𝕣𝕠𝕟𝕜 𝕗𝕠𝕣 𝕖𝕟𝕖𝕞𝕪"),
+    brand_inject("𝕨𝕙𝕪 𝕞𝕚𝕤𝕤? 𝕓𝕖𝕔𝕒𝕦𝕤𝕖 𝕒𝕞 𝕦𝕤𝕖 lavender"),
     "𝕥𝕣𝕪 𝕙𝕚𝕥 𝕞𝕖 𝕙𝕖𝕒𝕕",
-    "𝕪𝕦 𝕒𝕣𝕖'𝕣𝕖 𝕘𝕠𝕥 ℝ𝔼𝕊𝕤𝕠𝕝𝕧 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
-    "𝕒𝕞 𝕘𝕖𝕥 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣 𝕥𝕒𝕡",
-    "𝕌 𝕒ℝ𝔼 𝔾𝕆𝕋 𝕙𝕚𝕥 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
+    brand_inject("𝕪𝕦 𝕒𝕣𝕖'𝕣𝕖 𝕘𝕠𝕥 ℝ𝔼𝕊𝕤𝕠𝕝𝕧 𝕓𝕪 lavender"),
+    brand_inject("𝕒𝕞 𝕘𝕖𝕥 lavender 𝕥𝕒𝕡"),
+    brand_inject("𝕌 𝕒ℝ𝔼 𝔾𝕆𝕋 𝕙𝕚𝕥 𝕓𝕪 lavender"),
     "𝕪𝕠𝕦 𝕛𝕦𝕤𝕥 𝕘𝕠𝕥 𝟙𝕕 𝕗𝕠𝕣 𝟜$",
-    "𝕙𝕖𝕒𝕕 𝕡𝕠𝕡 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
+    brand_inject("𝕙𝕖𝕒𝕕 𝕡𝕠𝕡 𝕓𝕪 lavender"),
     "𝕔𝕝𝕚𝕔𝕜 𝕔𝕝𝕚𝕔𝕜 — 𝕙𝕖𝕒𝕕𝕤𝕙𝕠𝕥",
     "𝕟𝕖𝕩𝕥 𝕣𝕠𝕦𝕟𝕕, 𝕤𝕒𝕞𝕖 𝕣𝕖𝕤𝕦𝕝𝕥",
     "scooby was killed."
@@ -2453,12 +2493,12 @@ local killsay_hs = {
 
 local killsay_baim = {
     "𝕌 𝕒ℝ𝔼 𝔸ℝ𝔼 𝕋ℝ𝕐 𝕎𝕀ℕℕ𝕀ℕ𝔾 𝕄𝔼?",
-    "𝕪𝕠𝕦𝕣'𝕣𝕖 𝕒𝕣𝕖 𝕘𝕠𝕥 𝕕𝕖𝕒𝕕𝕖𝕕 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
+    brand_inject("𝕪𝕠𝕦𝕣'𝕣𝕖 𝕒𝕣𝕖 𝕘𝕠𝕥 𝕕𝕖𝕒𝕕𝕖𝕕 𝕓𝕪 lavender"),
     "𝕚 𝕒𝕞 𝕦𝕤𝕖 𝕓𝕖𝕤𝕥 𝕒𝕟𝕥𝕚𝕒𝕚𝕞 𝕝𝕦𝕒",
-    "𝕔𝕒𝕟𝕥 𝕙𝕚𝕥??? 𝕃𝔸𝕧𝕖𝕟𝕕𝕖𝕣 𝕝𝕦𝕒",
+    brand_inject("𝕔𝕒𝕟𝕥 𝕙𝕚𝕥??? Lavender lua"),
     "𝕓𝕠𝕕𝕪 𝕤𝕙𝕠𝕥 𝕓𝕦𝕥 𝕨𝕚𝕟 𝕚𝕤 𝕨𝕚𝕟",
-    "𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣 𝕓𝕠𝕕𝕪 𝕔𝕠𝕟𝕥𝕣𝕠𝕝 𝕠𝕟",
-    "𝕥𝕠𝕠 𝕤𝕝𝕠𝕨 — 𝕘𝕠𝕥 𝕓𝕒𝕚𝕞 𝕓𝕪 𝕝𝕒𝕧𝕖𝕟𝕕𝕖𝕣",
+    brand_inject("lavender 𝕓𝕠𝕕𝕪 𝕔𝕠𝕟𝕥𝕣𝕠𝕝 𝕠𝕟"),
+    brand_inject("𝕥𝕠𝕠 𝕤𝕝𝕠𝕨 — 𝕘𝕠𝕥 𝕓𝕒𝕚𝕞 𝕓𝕪 lavender"),
     "scooby was killed."
 }
 
@@ -3049,7 +3089,29 @@ client.set_event_callback("setup_command", function(cmd)
 end)
 
 
-local clantag_string = {"la", "lav", "lave", "laven", "lavend", "lavende", "lavender", "lavender.", "lavender.p", "lavender.pu", "lavender.pub ", "lavender.pub ", "lavender.pub ", "avender.pub ", "vender.pub ", "ender.pub ", "nder.pub ", "der.pub ", "er.pub ", "r.pub ", ".pub ", "pub ", "ub ", "b ", " ", ""}
+local function build_clantag_frames()
+    local frames = {}
+    local name = tostring(BRAND.name or "lavender")
+    local domain = tostring(BRAND.domain or name)
+    -- progressive reveal of base name
+    for i = 1, #name do
+        table.insert(frames, name:sub(1, i))
+    end
+    -- add domain suffix gradually if present
+    local suffix = ""
+    if domain ~= name then
+        suffix = domain:sub(#name + 1)
+        local acc = name
+        for i = 1, #suffix do
+            table.insert(frames, acc .. suffix:sub(1, i))
+        end
+    end
+    -- trailing spaces shrink to blank for a smooth loop
+    table.insert(frames, " ")
+    table.insert(frames, "")
+    return frames
+end
+local clantag_string = build_clantag_frames()
 local clantag_length = 9 -- number of characters to display in clantag
 local tick_rate = 25 -- default tick rate of animation
 local ping_compensation = 10 -- number of ticks to subtract from tick_rate per 50ms of latency
@@ -3944,7 +4006,7 @@ function resolver:on_paint()
 end
 
 
-client.register_esp_flag("LAVENDER", 185, 190, 255, function(ent)
+client.register_esp_flag(BRAND.esp_tag or "LAVENDER", 185, 190, 255, function(ent)
     if not lavender.funcs.check_build("private") then
         return end
     if not ui.get(lavender.ui.private.resolver_master) or not lavender.funcs.misc.contains(ui.get(lavender.ui.private.resolver_panel), "flags") then 
@@ -4085,4 +4147,4 @@ client.set_event_callback("shutdown", function()
     ui.set_visible(lavender.refs.misc.legs, true)
 end)
 
-notify.new_bottom(4, {ui.get(lavender.ui.visuals.notification_accent)}, "ON_LOAD", "welcome,", username, "to", "lavender")
+notify.new_bottom(4, {ui.get(lavender.ui.visuals.notification_accent)}, "ON_LOAD", "welcome,", username, "to", BRAND.name or "lavender")
