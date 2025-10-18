@@ -3378,6 +3378,10 @@ local resolver = {
     last_good_time = {},
     -- Tracks ignored misses per-entity (e.g. spread/DT) for diagnostics
     ignored_misses = {},
+    -- Counts high-confidence spread-like misses to trigger flips/escalation
+    high_conf_miss_count = {},
+    -- Hitchance threshold to reclassify 'spread' misses as resolver-related
+    hc_escalate_threshold = 85,
     mode = {},
     data = {
         body_yaw = {},
@@ -3463,6 +3467,7 @@ function resolver:clear_data()
     self.last_good_side = {}
     self.last_good_time = {}
     self.ignored_misses = {}
+    self.high_conf_miss_count = {}
 end
 
 function resolver:GetAnimationState(_Entity)
@@ -3832,9 +3837,16 @@ function resolver:on_miss(shot)
         return
     end
 
-    -- Filter out non-resolver misses (spread, DT tick, prediction issues) to avoid destabilizing resolver state
+    -- Reclassify some 'spread' misses as resolver-related when confidence is high
     local reason = tostring(shot.reason or ""):lower()
-    if reason == "spread" or reason == "?" or reason == "prediction error" or reason == "occlusion" then
+    local hit_chance = tonumber(shot.hit_chance or 0) or 0
+    local aimed_hg = tonumber(shot.hitgroup or -1) or -1
+    local is_high_conf_spread = (reason == "spread" or reason == "?") and hit_chance >= (self.hc_escalate_threshold or 85)
+    -- Treat head/high-HC misses more aggressively
+    local is_headshot_attempt = aimed_hg == 1
+
+    -- Filter out non-resolver misses (true spread, DT tick, prediction issues) to avoid destabilizing resolver state
+    if (reason == "spread" or reason == "?" or reason == "prediction error" or reason == "occlusion") and not is_high_conf_spread then
         self.ignored_misses[shot.target] = (self.ignored_misses[shot.target] or 0) + 1
         return
     end
@@ -3854,14 +3866,37 @@ function resolver:on_miss(shot)
         return
     end
 
-    -- Only escalate when reason strongly implies wrong resolve
+    -- Escalate when reason strongly implies wrong resolve OR high-confidence 'spread' suggests wrong side/amplitude
+    local should_escalate = false
     if reason:find("resolver", 1, true) or reason:find("desync", 1, true) or reason == "body yaw mismatch" then
-        local miss_count = self.data.missed_shots[shot.target] or 0
-        self.data.missed_shots[shot.target] = miss_count + 1
-    else
-        -- Unknown reasons: don't punish resolver
-        self.ignored_misses[shot.target] = (self.ignored_misses[shot.target] or 0) + 1
+        should_escalate = true
+    elseif is_high_conf_spread and (is_headshot_attempt or hit_chance >= (self.hc_escalate_threshold + 5)) then
+        -- If we missed head with 90+ HC and reason is spread, we likely had wrong side/amp
+        should_escalate = true
+        self.high_conf_miss_count[shot.target] = (self.high_conf_miss_count[shot.target] or 0) + 1
     end
+
+    if not should_escalate then
+        self.ignored_misses[shot.target] = (self.ignored_misses[shot.target] or 0) + 1
+        return
+    end
+
+    local miss_count = self.data.missed_shots[shot.target] or 0
+    miss_count = miss_count + 1
+    self.data.missed_shots[shot.target] = miss_count
+
+    -- Use last attempted side and flip aggressively after repeated/high-conf misses
+    local last_attempt_side = (self.old_data and self.old_data.body_yaw and self.old_data.body_yaw[shot.target] or 0) > 0 and 1 or 0
+    local flip_now = (self.high_conf_miss_count[shot.target] or 0) >= 1 or miss_count >= 2
+    if flip_now then
+        self.data.missed_body_yaw[shot.target] = 1 - last_attempt_side
+    else
+        self.data.missed_body_yaw[shot.target] = last_attempt_side
+    end
+
+    -- Bias next frame amplitude towards maximum to brute faster after confident misses
+    local max_body = self:get_max_body_yaw(shot.target) or 60
+    self.last_body_yaw[shot.target] = max_body
 end
 
 function resolver:on_round_start()
