@@ -3384,7 +3384,7 @@ local resolver = {
     -- Counts high-confidence spread-like misses to trigger flips/escalation
     high_conf_miss_count = {},
     -- Hitchance threshold to reclassify 'spread' misses as resolver-related
-    hc_escalate_threshold = 85,
+    hc_escalate_threshold = 80,
     -- Prevent hyperactive side flipping; seconds between flips per-target
     flip_cooldown_s = 0.35,
     last_flip_time = {},
@@ -3670,7 +3670,7 @@ function resolver:on_net_update_end()
 
         -- Sample a wider arc for better freestanding inference
         -- Include tighter inner samples to reduce hallway bias
-        local angles = {-135, -120, -90, -60, -30, -15, 15, 30, 60, 90, 120, 135}
+        local angles = {-150, -135, -120, -105, -90, -75, -60, -45, -30, -15, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150}
 
         for i, angle in ipairs(angles) do
 
@@ -3682,11 +3682,8 @@ function resolver:on_net_update_end()
 
         end
 
-        if trace_data.left > trace_data.right then
-            side = 1
-        else
-            side = 0
-        end
+        -- Combine raycast arc vote with bullet damage sampling confidence
+        local side_vote = trace_data.left > trace_data.right and 1 or 0
 
         local trace_bullet_data = {left = 0, right = 0}
 
@@ -3701,13 +3698,18 @@ function resolver:on_net_update_end()
         end
 
         if (trace_bullet_data.left + trace_bullet_data.right) > 0 then
-
-            if trace_bullet_data.left > trace_bullet_data.right then
-                side = 1
+            local bullet_vote = trace_bullet_data.left > trace_bullet_data.right and 1 or 0
+            local diff = math.abs(trace_bullet_data.left - trace_bullet_data.right)
+            local total = trace_bullet_data.left + trace_bullet_data.right
+            local confidence = total > 0 and (diff / math.max(total, 1)) or 0
+            -- If bullets show strong bias, trust them; else fallback to traces
+            if confidence >= 0.12 then
+                side = bullet_vote
             else
-                side = 0
+                side = side_vote
             end
-
+        else
+            side = side_vote
         end
 
         local target_yaw = math.deg(math.atan2(self.data.vector_origin[ent].y - y, self.data.vector_origin[ent].x - x))
@@ -3842,7 +3844,7 @@ function resolver:on_net_update_end()
                 end
                 local current = math.abs(body_yaw)
                 local target = math.abs(self.last_good_body_yaw[ent])
-                body_yaw = math.abs(approach(current, target, 2))
+                body_yaw = math.abs(approach(current, target, 1.5))
             end
         end
 
@@ -3873,7 +3875,7 @@ function resolver:on_miss(shot)
     local aimed_hg = tonumber(shot.hitgroup or -1) or -1
     local is_headshot_attempt = aimed_hg == 1
     -- Consider head attempts with moderate HC as signal (helps reduce 'spread' masking wrong side)
-    local is_high_conf_spread = (reason == "spread" or reason == "?") and (hit_chance >= (self.hc_escalate_threshold or 85) or (is_headshot_attempt and hit_chance >= 60))
+    local is_high_conf_spread = (reason == "spread" or reason == "?") and (hit_chance >= (self.hc_escalate_threshold or 80) or (is_headshot_attempt and hit_chance >= 58))
     -- Treat head/high-HC misses more aggressively
 
     -- Filter out non-resolver misses (true spread, DT tick, prediction issues) to avoid destabilizing resolver state
@@ -3901,7 +3903,7 @@ function resolver:on_miss(shot)
     local should_escalate = false
     if reason:find("resolver", 1, true) or reason:find("desync", 1, true) or reason == "body yaw mismatch" then
         should_escalate = true
-    elseif is_high_conf_spread and (is_headshot_attempt or hit_chance >= (self.hc_escalate_threshold + 5)) then
+    elseif is_high_conf_spread and (is_headshot_attempt or hit_chance >= (self.hc_escalate_threshold + 7)) then
         -- If we missed head with 90+ HC and reason is spread, we likely had wrong side/amp
         should_escalate = true
         self.high_conf_miss_count[shot.target] = (self.high_conf_miss_count[shot.target] or 0) + 1
