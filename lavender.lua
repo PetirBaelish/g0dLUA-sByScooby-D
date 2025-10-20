@@ -1384,13 +1384,15 @@ function startup()
      
            
     }
-    client.exec("clear")
+    -- Safe console output: guard against environments without console
+    local ok_clear = pcall(client.exec, "clear")
     for _, line in pairs(logo) do
-        client.color_log(185, 190, 255, line)
+        pcall(client.color_log, 185, 190, 255, line)
     end
 
     -- Prepare AA
-    lavender.funcs.aa.reset(true)
+    -- Wrap AA reset to avoid startup crashes in partial environments
+    pcall(function() lavender.funcs.aa.reset(true) end)
 end
 startup()
 
@@ -3424,6 +3426,16 @@ local resolver = {
     -- Prevent hyperactive side flipping; seconds between flips per-target
     flip_cooldown_s = 0.35,
     last_flip_time = {},
+    -- Performance: throttle heavy bullet sampling per-target
+    sample_interval_ticks = 2,
+    last_sample_tick = {},
+    cached_bullet_vote = {},
+    cached_bullet_confidence = {},
+    bullet_conf_threshold = 0.12,
+    -- Precompute static sample parameters
+    sample_angles = {-150, -135, -120, -105, -90, -75, -60, -45, -30, -15, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150},
+    raycast_distance = 8192,
+    bullet_sample_distance = 128,
     -- Temporary per-target aiming safety overrides
     overrides = {},
     mode = {},
@@ -3514,6 +3526,9 @@ function resolver:clear_data()
     self.high_conf_miss_count = {}
     self.last_flip_time = {}
     self.overrides = {}
+    self.last_sample_tick = {}
+    self.cached_bullet_vote = {}
+    self.cached_bullet_confidence = {}
 end
 
 function resolver:apply_overrides(ent)
@@ -3646,6 +3661,8 @@ function resolver:on_net_update_end()
 
 
     local me = entity.get_local_player()
+    local eye_x, eye_y, eye_z = client.eye_position()
+    local now_tick = globals.tickcount and globals.tickcount() or 0
 
     for id = 1, globals.maxplayers() do
 
@@ -3702,15 +3719,13 @@ function resolver:on_net_update_end()
 
         local trace_data = {left = 0, right = 0}
 
-        local x, y, z = client.eye_position()
-
         -- Sample a wider arc for better freestanding inference
         -- Include tighter inner samples to reduce hallway bias
-        local angles = {-150, -135, -120, -105, -90, -75, -60, -45, -30, -15, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150}
+        local angles = self.sample_angles
 
         for i, angle in ipairs(angles) do
 
-            local to_x, to_y, to_z = lavender.funcs.aa.extend_vector(self.data.vector_origin[ent].x, self.data.vector_origin[ent].y, self.data.vector_origin[ent].z + 64, 8192, self.data.eye_angles[ent].y + 180 - angle)
+            local to_x, to_y, to_z = lavender.funcs.aa.extend_vector(self.data.vector_origin[ent].x, self.data.vector_origin[ent].y, self.data.vector_origin[ent].z + 64, self.raycast_distance or 8192, self.data.eye_angles[ent].y + 180 - angle)
 
             local fraction = client.trace_line(ent, self.data.vector_origin[ent].x, self.data.vector_origin[ent].y, self.data.vector_origin[ent].z + 64, to_x, to_y, to_z)
 
@@ -3721,29 +3736,33 @@ function resolver:on_net_update_end()
         -- Combine raycast arc vote with bullet damage sampling confidence
         local side_vote = trace_data.left > trace_data.right and 1 or 0
 
-        local trace_bullet_data = {left = 0, right = 0}
-
-        for i, angle in ipairs(angles) do
-
-            local to_x, to_y, to_z = lavender.funcs.aa.extend_vector(self.data.vector_origin[ent].x, self.data.vector_origin[ent].y, self.data.vector_origin[ent].z + 64, 128, self.data.eye_angles[ent].y + angle)
-
-            local _, damage = client.trace_bullet(me, x, y, z, to_x, to_y, to_z, me)
-
-            trace_bullet_data[angle < 0 and "left" or "right"] = trace_bullet_data[angle < 0 and "left" or "right"] + damage
-
+        -- Throttled bullet sampling with caching
+        local bullet_vote, confidence
+        if (now_tick - (self.last_sample_tick[ent] or -1e9)) >= (self.sample_interval_ticks or 2) then
+            local trace_bullet_data = {left = 0, right = 0}
+            for i, angle in ipairs(angles) do
+                local to_x, to_y, to_z = lavender.funcs.aa.extend_vector(self.data.vector_origin[ent].x, self.data.vector_origin[ent].y, self.data.vector_origin[ent].z + 64, self.bullet_sample_distance or 128, self.data.eye_angles[ent].y + angle)
+                local _, damage = client.trace_bullet(me, eye_x, eye_y, eye_z, to_x, to_y, to_z, me)
+                trace_bullet_data[angle < 0 and "left" or "right"] = trace_bullet_data[angle < 0 and "left" or "right"] + (damage or 0)
+            end
+            if (trace_bullet_data.left + trace_bullet_data.right) > 0 then
+                bullet_vote = trace_bullet_data.left > trace_bullet_data.right and 1 or 0
+                local diff = math.abs(trace_bullet_data.left - trace_bullet_data.right)
+                local total = trace_bullet_data.left + trace_bullet_data.right
+                confidence = total > 0 and (diff / math.max(total, 1)) or 0
+            else
+                bullet_vote, confidence = nil, 0
+            end
+            self.cached_bullet_vote[ent] = bullet_vote
+            self.cached_bullet_confidence[ent] = confidence or 0
+            self.last_sample_tick[ent] = now_tick
+        else
+            bullet_vote = self.cached_bullet_vote[ent]
+            confidence = self.cached_bullet_confidence[ent] or 0
         end
 
-        if (trace_bullet_data.left + trace_bullet_data.right) > 0 then
-            local bullet_vote = trace_bullet_data.left > trace_bullet_data.right and 1 or 0
-            local diff = math.abs(trace_bullet_data.left - trace_bullet_data.right)
-            local total = trace_bullet_data.left + trace_bullet_data.right
-            local confidence = total > 0 and (diff / math.max(total, 1)) or 0
-            -- If bullets show strong bias, trust them; else fallback to traces
-            if confidence >= 0.12 then
-                side = bullet_vote
-            else
-                side = side_vote
-            end
+        if bullet_vote ~= nil and (confidence or 0) >= (self.bullet_conf_threshold or 0.12) then
+            side = bullet_vote
         else
             side = side_vote
         end
