@@ -3052,17 +3052,53 @@ client.set_event_callback("setup_command", function(cmd)
 end)
 
 
-local clantag_string = {"la", "lav", "lave", "laven", "lavend", "lavende", "lavender", "lavender.", "lavender.p", "lavender.pu", "lavender.pub ", "lavender.pub ", "lavender.pub ", "avender.pub ", "vender.pub ", "ender.pub ", "nder.pub ", "der.pub ", "er.pub ", "r.pub ", ".pub ", "pub ", "ub ", "b ", " ", ""}
-local clantag_length = 9 -- number of characters to display in clantag
-local tick_rate = 25 -- default tick rate of animation
-local ping_compensation = 10 -- number of ticks to subtract from tick_rate per 50ms of latency
+-- Beautiful animated clantag for "scooby.pub"
+-- Sequence includes: intro symbol wave, "hacker" showcase (varied styles),
+-- typewriter reveal of "scooby.pub", decorative cycles, and a smooth scroll-out.
+local clantag_string = {
+    -- intro wave
+    ">", 
+    ">>", 
+    ">>>", 
+    ">>>>", 
+    ">>>>>", 
+    ">>>>", 
+    ">>>", 
+    ">>", 
+    ">",
+
+    -- "hacker" type-in
+    "h", "ha", "hac", "hack", "hacke", "hacker",
+    -- styles for "hacker"
+    "HACKER", "[hacker]", "{hacker}", "<hacker>", "|hacker|", "*hacker*", "-=hacker=-", "h a c k e r",
+    -- fade out "hacker"
+    "hacke", "hack", "hac", "ha", "h", "",
+
+    -- typewriter reveal of scooby.pub
+    "s", "sc", "sco", "scoo", "scoob", "scooby", "scooby.", "scooby.p", "scooby.pu", "scooby.pub",
+    -- hold full tag for a few frames
+    "scooby.pub", "scooby.pub", "scooby.pub",
+    -- decorative variants
+    "SCOOBY.PUB", "*scooby.pub*", "[ scooby.pub ]", "> scooby.pub <", "{scooby.pub}", "|scooby.pub|", "~scooby.pub~", ">>scooby.pub<<", "=scooby.pub=", "- scooby.pub -",
+
+    -- smooth left scroll-out
+    "scooby.pub ", "cooby.pub ", "ooby.pub ", "oby.pub ", "by.pub ", "y.pub ", ".pub ", "pub ", "ub ", "b ", " ", ""
+}
+
+-- Max characters the game typically renders in clantag
+local clantag_length = 15
+local tick_rate = 25 -- base speed of animation (lower = faster)
+local ping_compensation = 10 -- ticks to subtract per 50ms latency
 
 local function update_clantag()
     if not ui.get(lavender.ui.misc.clantag) then
         return
     end
     ui.set(lavender.refs.misc.clantag, false)
-    local index = math.floor(globals.tickcount() / (tick_rate - ping_compensation * math.floor(client.latency() / 50))) % #clantag_string
+    -- Clamp effective rate to avoid zero/negative at high ping
+    local effective_rate = tick_rate - ping_compensation * math.floor(client.latency() / 50)
+    if effective_rate < 4 then effective_rate = 4 end
+    local index = math.floor(globals.tickcount() / effective_rate) % #clantag_string
     local tag = clantag_string[index+1]
     if index > #clantag_string - clantag_length then
         tag = string.sub(tag, 1, clantag_length)
