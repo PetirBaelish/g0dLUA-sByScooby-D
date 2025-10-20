@@ -1,5 +1,5 @@
 lib_error = function(library)
-    error(string.format("Lavender - failed to retrieve '%s' library. Head over to our discord and subscribe to all the libraries and reload your cheat", library))
+    error(string.format("Scooby - failed to retrieve '%s' library. Head over to our discord and subscribe to all the libraries and reload your cheat", library))
 end
 
 -- Libraries
@@ -535,7 +535,7 @@ lavender.funcs = {
             return result
         end),
         colour_console = LPH_JIT(function(prefix, string)
-            client.color_log(prefix[1], prefix[2], prefix[3], "lavender ~ \0")
+            client.color_log(prefix[1], prefix[2], prefix[3], "scooby ~ \0")
             client.color_log(255, 255, 232, string)
         end),
         can_hit_enemy = LPH_NO_VIRTUALIZE(function(target, ticks, head_only)
@@ -1351,7 +1351,7 @@ function startup()
     "  := .%: :#*   -+-:+:                              ",
     "   #  :+  #  :+. .=+=*                             ",
     " -+    *  * -=  =-  +:                             ",
-    " #     -=:*++  =-   *.         Welcome to Lavender, " .. username,
+    " #     -=:*++  =-   *.         Welcome to Scooby, " .. username,
     " :=-:==+%=  #==*   :+:         You have, " .. build .. " access.",
     "    -+  *: *. .*===+           version loaded: " .. version,
     "  +-*-   #.+   *.  #           Any questions or issues, Create a ticket via our Discord",
@@ -1384,13 +1384,15 @@ function startup()
      
            
     }
-    client.exec("clear")
+    -- Safe console output: guard against environments without console
+    local ok_clear = pcall(client.exec, "clear")
     for _, line in pairs(logo) do
-        client.color_log(185, 190, 255, line)
+        pcall(client.color_log, 185, 190, 255, line)
     end
 
     -- Prepare AA
-    lavender.funcs.aa.reset(true)
+    -- Wrap AA reset to avoid startup crashes in partial environments
+    pcall(function() lavender.funcs.aa.reset(true) end)
 end
 startup()
 
@@ -1434,7 +1436,7 @@ lavender.handlers.control_animation_main = function()
     if lavender.ui.current_tab ~= "HOME" then
         ui.set(lavender.ui.tab_visualize, lavender.funcs.renderer.colour_text_menu("• ") .. "selected tab: " .. lavender.funcs.renderer.two_gradient_text(cur_tab, colour[1], colour[2], colour[3], 15))
     else
-        ui.set(lavender.ui.tab_visualize, lavender.funcs.renderer.colour_text_menu("• ") .. "welcome to " .. lavender.funcs.renderer.two_gradient_text("lavender.pub", colour[1], colour[2], colour[3], 6))
+        ui.set(lavender.ui.tab_visualize, lavender.funcs.renderer.colour_text_menu("• ") .. "welcome to " .. lavender.funcs.renderer.two_gradient_text("scooby.pub", colour[1], colour[2], colour[3], 6))
     end
 end
 
@@ -2082,7 +2084,7 @@ lavender.handlers.visuals.watermark = function()
     local r, g, b = ui.get(colour)
     local hour, minute, second, mill = client.system_time()
     local hr, m, s = string.format("%02d", hour), string.format("%02d", minute), string.format("%02d", second)
-    local string = "lavender".. lavender.funcs.renderer.colour_text(".pub", colour) .. " [" .. build .. "] | " .. lavender.funcs.renderer.colour_text(username, colour) .. " | " .. lavender.funcs.renderer.colour_text(hr, colour) .. ":" .. lavender.funcs.renderer.colour_text(m, colour) .. ":" .. lavender.funcs.renderer.colour_text(s, colour)
+    local string = "scooby".. lavender.funcs.renderer.colour_text(".pub", colour) .. " [" .. build .. "] | " .. lavender.funcs.renderer.colour_text(username, colour) .. " | " .. lavender.funcs.renderer.colour_text(hr, colour) .. ":" .. lavender.funcs.renderer.colour_text(m, colour) .. ":" .. lavender.funcs.renderer.colour_text(s, colour)
     local measure_string = vector(renderer.measure_text("", string .. "   "))
     local h = 25
     local w = measure_string.x + 10
@@ -2408,7 +2410,7 @@ local hitgroup_names = {'generic', 'head', 'chest', 'stomach', 'left arm', 'righ
 client.set_event_callback("aim_hit", function(e)
 	local hgroup = hitgroup_names[e.hitgroup + 1] or '?'
     if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "shot log (notify)") then
-        notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_notify_hit_accent)}, "shot_log_hit", "", "lavender", "~ hit", entity.get_player_name(e.target), "for", e.damage, "in", hgroup)
+        notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_notify_hit_accent)}, "shot_log_hit", "", "scooby", "~ hit", entity.get_player_name(e.target), "for", e.damage, "in", hgroup)
     end
 
     if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "shot log (console)") then
@@ -2425,7 +2427,7 @@ client.set_event_callback("aim_miss", function(e)
         local is_head = (e.hitgroup or -1) == 1
         local reclassify = (reason == "spread" or reason == "?") and (hc >= 85 or (is_head and hc >= 60))
         local shown_reason = reclassify and "resolver (reclassed)" or (e.reason or "?")
-        notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_notify_miss_accent)}, "shot_log_miss", "", "lavender", "~ missed due to", shown_reason, "(hc: " .. math.floor(hc) .. ", aimed: " .. hgroup .. ")")
+        notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_notify_miss_accent)}, "shot_log_miss", "", "scooby", "~ missed due to", shown_reason, "(hc: " .. math.floor(hc) .. ", aimed: " .. hgroup .. ")")
     end
 
     if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "shot log (console)") then
@@ -2720,7 +2722,7 @@ lavender.handlers.aa.death = function(e)
             abstage = 0
             lastmiss = 0
             if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "anti brute log (notify)") then
-                notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_ab_notify_accent)},"", "", "lavender", "~ anti brute reset", "death")
+                notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_ab_notify_accent)},"", "", "scooby", "~ anti brute reset", "death")
             end
             if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "anti brute log (console)") then
                 lavender.funcs.misc.colour_console({ui.get(lavender.ui.visuals.log_ab_console_accent)}, "anti brute reset | death")
@@ -2741,7 +2743,7 @@ lavender.handlers.aa.round_start = function()
         lastmiss = 0
         abstage = 0
         if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "anti brute log (notify)") then
-            notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_ab_notify_accent)},"", "", "lavender", "~ anti brute reset", "round end")
+            notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_ab_notify_accent)},"", "", "scooby", "~ anti brute reset", "round end")
         end
         if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "anti brute log (console)") then
             lavender.funcs.misc.colour_console({ui.get(lavender.ui.visuals.log_ab_console_accent)}, "anti brute reset | round end")
@@ -2768,7 +2770,7 @@ lavender.handlers.aa.headshot = function(c)
                 abstage = 0
                 lastmiss = 0
                 if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "anti brute log (notify)") then
-                    notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_ab_notify_accent)},"", "", "lavender", "~ anti brute reset", "headshot")
+                    notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_ab_notify_accent)},"", "", "scooby", "~ anti brute reset", "headshot")
                 end
                 if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "anti brute log (console)") then
                     lavender.funcs.misc.colour_console({ui.get(lavender.ui.visuals.log_ab_console_accent)}, "anti brute reset | headshot")
@@ -2844,7 +2846,7 @@ client.set_event_callback("bullet_impact", function(e)
         abstage = abstage >= 3 and 0 or abstage + 1
         abstage = abstage == 0 and 1 or abstage
         if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "anti brute log (notify)") then
-            notify.new_bottom(1, {ui.get(lavender.ui.visuals.log_ab_notify_accent)},"", "lavender", "~ anti brute activated due to shot stage:", tostring(abstage))
+            notify.new_bottom(1, {ui.get(lavender.ui.visuals.log_ab_notify_accent)},"", "scooby", "~ anti brute activated due to shot stage:", tostring(abstage))
         end
         if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "anti brute log (console)") then
             lavender.funcs.misc.colour_console({ui.get(lavender.ui.visuals.log_ab_console_accent)}, "anti brute activated stage: " .. tostring(abstage))
@@ -3067,12 +3069,12 @@ local clantag_string = {
     ">>", 
     ">",
 
-    -- "hacker" type-in
-    "h", "ha", "hac", "hack", "hacke", "hacker",
-    -- styles for "hacker"
-    "HACKER", "[hacker]", "{hacker}", "<hacker>", "|hacker|", "*hacker*", "-=hacker=-", "h a c k e r",
-    -- fade out "hacker"
-    "hacke", "hack", "hac", "ha", "h", "",
+-- "Sc00bY" type-in
+    "S", "Sc", "Sc0", "Sc00", "Sc00b", "Sc00bY",
+    -- styles for "Sc00bY"
+    "Sc00bY", "[Sc00bY]", "{Sc00bY}", "<Sc00bY>", "|Sc00bY|", "*Sc00bY*", "-=Sc00bY=-", "S c 0 0 b Y",
+    -- fade out "Sc00bY"
+    "Sc00b", "Sc00", "Sc0", "Sc", "S", "",
 
     -- typewriter reveal of scooby.pub
     "s", "sc", "sco", "scoo", "scoob", "scooby", "scooby.", "scooby.p", "scooby.pu", "scooby.pub",
@@ -3424,6 +3426,16 @@ local resolver = {
     -- Prevent hyperactive side flipping; seconds between flips per-target
     flip_cooldown_s = 0.35,
     last_flip_time = {},
+    -- Performance: throttle heavy bullet sampling per-target
+    sample_interval_ticks = 2,
+    last_sample_tick = {},
+    cached_bullet_vote = {},
+    cached_bullet_confidence = {},
+    bullet_conf_threshold = 0.12,
+    -- Precompute static sample parameters
+    sample_angles = {-150, -135, -120, -105, -90, -75, -60, -45, -30, -15, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150},
+    raycast_distance = 8192,
+    bullet_sample_distance = 128,
     -- Temporary per-target aiming safety overrides
     overrides = {},
     mode = {},
@@ -3514,6 +3526,9 @@ function resolver:clear_data()
     self.high_conf_miss_count = {}
     self.last_flip_time = {}
     self.overrides = {}
+    self.last_sample_tick = {}
+    self.cached_bullet_vote = {}
+    self.cached_bullet_confidence = {}
 end
 
 function resolver:apply_overrides(ent)
@@ -3646,6 +3661,8 @@ function resolver:on_net_update_end()
 
 
     local me = entity.get_local_player()
+    local eye_x, eye_y, eye_z = client.eye_position()
+    local now_tick = globals.tickcount and globals.tickcount() or 0
 
     for id = 1, globals.maxplayers() do
 
@@ -3702,15 +3719,13 @@ function resolver:on_net_update_end()
 
         local trace_data = {left = 0, right = 0}
 
-        local x, y, z = client.eye_position()
-
         -- Sample a wider arc for better freestanding inference
         -- Include tighter inner samples to reduce hallway bias
-        local angles = {-150, -135, -120, -105, -90, -75, -60, -45, -30, -15, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150}
+        local angles = self.sample_angles
 
         for i, angle in ipairs(angles) do
 
-            local to_x, to_y, to_z = lavender.funcs.aa.extend_vector(self.data.vector_origin[ent].x, self.data.vector_origin[ent].y, self.data.vector_origin[ent].z + 64, 8192, self.data.eye_angles[ent].y + 180 - angle)
+            local to_x, to_y, to_z = lavender.funcs.aa.extend_vector(self.data.vector_origin[ent].x, self.data.vector_origin[ent].y, self.data.vector_origin[ent].z + 64, self.raycast_distance or 8192, self.data.eye_angles[ent].y + 180 - angle)
 
             local fraction = client.trace_line(ent, self.data.vector_origin[ent].x, self.data.vector_origin[ent].y, self.data.vector_origin[ent].z + 64, to_x, to_y, to_z)
 
@@ -3721,29 +3736,33 @@ function resolver:on_net_update_end()
         -- Combine raycast arc vote with bullet damage sampling confidence
         local side_vote = trace_data.left > trace_data.right and 1 or 0
 
-        local trace_bullet_data = {left = 0, right = 0}
-
-        for i, angle in ipairs(angles) do
-
-            local to_x, to_y, to_z = lavender.funcs.aa.extend_vector(self.data.vector_origin[ent].x, self.data.vector_origin[ent].y, self.data.vector_origin[ent].z + 64, 128, self.data.eye_angles[ent].y + angle)
-
-            local _, damage = client.trace_bullet(me, x, y, z, to_x, to_y, to_z, me)
-
-            trace_bullet_data[angle < 0 and "left" or "right"] = trace_bullet_data[angle < 0 and "left" or "right"] + damage
-
+        -- Throttled bullet sampling with caching
+        local bullet_vote, confidence
+        if (now_tick - (self.last_sample_tick[ent] or -1e9)) >= (self.sample_interval_ticks or 2) then
+            local trace_bullet_data = {left = 0, right = 0}
+            for i, angle in ipairs(angles) do
+                local to_x, to_y, to_z = lavender.funcs.aa.extend_vector(self.data.vector_origin[ent].x, self.data.vector_origin[ent].y, self.data.vector_origin[ent].z + 64, self.bullet_sample_distance or 128, self.data.eye_angles[ent].y + angle)
+                local _, damage = client.trace_bullet(me, eye_x, eye_y, eye_z, to_x, to_y, to_z, me)
+                trace_bullet_data[angle < 0 and "left" or "right"] = trace_bullet_data[angle < 0 and "left" or "right"] + (damage or 0)
+            end
+            if (trace_bullet_data.left + trace_bullet_data.right) > 0 then
+                bullet_vote = trace_bullet_data.left > trace_bullet_data.right and 1 or 0
+                local diff = math.abs(trace_bullet_data.left - trace_bullet_data.right)
+                local total = trace_bullet_data.left + trace_bullet_data.right
+                confidence = total > 0 and (diff / math.max(total, 1)) or 0
+            else
+                bullet_vote, confidence = nil, 0
+            end
+            self.cached_bullet_vote[ent] = bullet_vote
+            self.cached_bullet_confidence[ent] = confidence or 0
+            self.last_sample_tick[ent] = now_tick
+        else
+            bullet_vote = self.cached_bullet_vote[ent]
+            confidence = self.cached_bullet_confidence[ent] or 0
         end
 
-        if (trace_bullet_data.left + trace_bullet_data.right) > 0 then
-            local bullet_vote = trace_bullet_data.left > trace_bullet_data.right and 1 or 0
-            local diff = math.abs(trace_bullet_data.left - trace_bullet_data.right)
-            local total = trace_bullet_data.left + trace_bullet_data.right
-            local confidence = total > 0 and (diff / math.max(total, 1)) or 0
-            -- If bullets show strong bias, trust them; else fallback to traces
-            if confidence >= 0.12 then
-                side = bullet_vote
-            else
-                side = side_vote
-            end
+        if bullet_vote ~= nil and (confidence or 0) >= (self.bullet_conf_threshold or 0.12) then
+            side = bullet_vote
         else
             side = side_vote
         end
@@ -4210,4 +4229,4 @@ client.set_event_callback("shutdown", function()
     ui.set_visible(lavender.refs.misc.legs, true)
 end)
 
-notify.new_bottom(4, {ui.get(lavender.ui.visuals.notification_accent)}, "ON_LOAD", "welcome,", username, "to", "lavender")
+notify.new_bottom(4, {ui.get(lavender.ui.visuals.notification_accent)}, "ON_LOAD", "welcome,", username, "to", "scooby")
