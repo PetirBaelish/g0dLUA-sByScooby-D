@@ -22,7 +22,7 @@ Lavender is a premium, modern Gamesense Lua focused on accuracy, stability and a
 - Improved logging: miss notifications/console now show "resolver (reclassed)" when reclassified
 
 ## Usage
-- Drop `lavender.lua` into your Gamesense Lua directory and load it
+- Drop `scooby.lua` into your Gamesense Lua directory and load it
 - In AA settings, enable Lavender resolver and optional info panel/flags
 - Use standard GS keybinds (DT, On Shot AA, Quick Peek, Prefer/Force Safe Point, Body Aim)
 - Lavender will automatically adapt per target; you can observe state in the resolver panel and ESP flag `LAVENDER`
