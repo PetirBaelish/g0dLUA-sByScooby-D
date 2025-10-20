@@ -2420,18 +2420,21 @@ client.set_event_callback("aim_miss", function(e)
 	local hgroup = hitgroup_names[e.hitgroup + 1] or '?'
 
     if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "shot log (notify)") then
-        local flag = ""
         local reason = tostring(e.reason or ""):lower()
-        if reason == "spread" or reason == "?" then
-            flag = " [ignored]"
-        end
-        notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_notify_miss_accent)}, "shot_log_miss", "", "lavender", "~ missed due to", e.reason .. flag, "(hc: " .. math.floor(e.hit_chance) .. ", aimed: " .. hgroup .. ")")
+        local hc = tonumber(e.hit_chance or 0) or 0
+        local is_head = (e.hitgroup or -1) == 1
+        local reclassify = (reason == "spread" or reason == "?") and (hc >= 85 or (is_head and hc >= 60))
+        local shown_reason = reclassify and "resolver (reclassed)" or (e.reason or "?")
+        notify.new_bottom(2, {ui.get(lavender.ui.visuals.log_notify_miss_accent)}, "shot_log_miss", "", "lavender", "~ missed due to", shown_reason, "(hc: " .. math.floor(hc) .. ", aimed: " .. hgroup .. ")")
     end
 
     if lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.informative_visual), "shot log (console)") then
         local reason = tostring(e.reason or ""):lower()
-        local tag = (reason == "spread" or reason == "?") and " [ignored]" or ""
-        lavender.funcs.misc.colour_console({ui.get(lavender.ui.visuals.log_console_accent)}, string.format("missed due to %s%s (hc: %s, aimed: %s)", e.reason, tag, math.floor(e.hit_chance), hgroup))
+        local hc = tonumber(e.hit_chance or 0) or 0
+        local is_head = (e.hitgroup or -1) == 1
+        local reclassify = (reason == "spread" or reason == "?") and (hc >= 85 or (is_head and hc >= 60))
+        local shown_reason = reclassify and "resolver (reclassed)" or (e.reason or "?")
+        lavender.funcs.misc.colour_console({ui.get(lavender.ui.visuals.log_console_accent)}, string.format("missed due to %s (hc: %s, aimed: %s)", shown_reason, math.floor(hc), hgroup))
     end
 
 end)
@@ -3382,6 +3385,11 @@ local resolver = {
     high_conf_miss_count = {},
     -- Hitchance threshold to reclassify 'spread' misses as resolver-related
     hc_escalate_threshold = 85,
+    -- Prevent hyperactive side flipping; seconds between flips per-target
+    flip_cooldown_s = 0.35,
+    last_flip_time = {},
+    -- Temporary per-target aiming safety overrides
+    overrides = {},
     mode = {},
     data = {
         body_yaw = {},
@@ -3468,6 +3476,26 @@ function resolver:clear_data()
     self.last_good_time = {}
     self.ignored_misses = {}
     self.high_conf_miss_count = {}
+    self.last_flip_time = {}
+    self.overrides = {}
+end
+
+function resolver:apply_overrides(ent)
+    -- Apply temporary per-target safety overrides with automatic expiry
+    local now = (globals.realtime and globals.realtime()) or 0
+    local o = self.overrides[ent]
+    if o ~= nil and (o.until_ts or 0) > now then
+        local prefer_baim = o.prefer_baim == true
+        local force_sp = o.force_sp == true
+        -- Use pcall in case the attribute string is unavailable in this environment
+        pcall(plist.set, ent, "Prefer body aim", prefer_baim)
+        pcall(plist.set, ent, "Force safe point", force_sp)
+    else
+        -- Expired or absent: ensure overrides are off and clear state
+        pcall(plist.set, ent, "Prefer body aim", false)
+        pcall(plist.set, ent, "Force safe point", false)
+        self.overrides[ent] = nil
+    end
 end
 
 function resolver:GetAnimationState(_Entity)
@@ -3823,6 +3851,8 @@ function resolver:on_net_update_end()
         plist.set(ent, "Force body yaw", ui.get(lavender.ui.private.resolver_master) and true or false)
 
         plist.set(ent, "Force body yaw value", ui.get(lavender.ui.private.resolver_master) and self.data.body_yaw[ent] or 0)
+        -- Apply temporary safety overrides (prefer body aim / force safe point)
+        self:apply_overrides(ent)
         self:copy_data(ent)
 
         dbangles = math.floor(body_yaw)
@@ -3841,9 +3871,10 @@ function resolver:on_miss(shot)
     local reason = tostring(shot.reason or ""):lower()
     local hit_chance = tonumber(shot.hit_chance or 0) or 0
     local aimed_hg = tonumber(shot.hitgroup or -1) or -1
-    local is_high_conf_spread = (reason == "spread" or reason == "?") and hit_chance >= (self.hc_escalate_threshold or 85)
-    -- Treat head/high-HC misses more aggressively
     local is_headshot_attempt = aimed_hg == 1
+    -- Consider head attempts with moderate HC as signal (helps reduce 'spread' masking wrong side)
+    local is_high_conf_spread = (reason == "spread" or reason == "?") and (hit_chance >= (self.hc_escalate_threshold or 85) or (is_headshot_attempt and hit_chance >= 60))
+    -- Treat head/high-HC misses more aggressively
 
     -- Filter out non-resolver misses (true spread, DT tick, prediction issues) to avoid destabilizing resolver state
     if (reason == "spread" or reason == "?" or reason == "prediction error" or reason == "occlusion") and not is_high_conf_spread then
@@ -3888,8 +3919,17 @@ function resolver:on_miss(shot)
     -- Use last attempted side and flip aggressively after repeated/high-conf misses
     local last_attempt_side = (self.old_data and self.old_data.body_yaw and self.old_data.body_yaw[shot.target] or 0) > 0 and 1 or 0
     local flip_now = (self.high_conf_miss_count[shot.target] or 0) >= 1 or miss_count >= 2
+    -- Enforce per-target flip cooldown to stabilize side decisions
     if flip_now then
-        self.data.missed_body_yaw[shot.target] = 1 - last_attempt_side
+        local now = (globals.realtime and globals.realtime()) or 0
+        local last_flip = self.last_flip_time[shot.target] or 0
+        if (now - last_flip) >= (self.flip_cooldown_s or 0.35) then
+            self.data.missed_body_yaw[shot.target] = 1 - last_attempt_side
+            self.last_flip_time[shot.target] = now
+        else
+            -- Too soon to flip again; keep last side for stability
+            self.data.missed_body_yaw[shot.target] = last_attempt_side
+        end
     else
         self.data.missed_body_yaw[shot.target] = last_attempt_side
     end
@@ -3897,6 +3937,18 @@ function resolver:on_miss(shot)
     -- Bias next frame amplitude towards maximum to brute faster after confident misses
     local max_body = self:get_max_body_yaw(shot.target) or 60
     self.last_body_yaw[shot.target] = max_body
+
+    -- After repeated high-confidence misses, enable temporary safety overrides
+    local now_ts = (globals.realtime and globals.realtime()) or 0
+    if (self.high_conf_miss_count[shot.target] or 0) >= 2 or miss_count >= 3 then
+        if is_headshot_attempt then
+            -- Force safe point briefly after repeated head/high-HC spread misses
+            self.overrides[shot.target] = { force_sp = true, prefer_baim = false, until_ts = now_ts + 1.25 }
+        else
+            -- Prefer body aim temporarily to stabilize on easy hitboxes
+            self.overrides[shot.target] = { force_sp = false, prefer_baim = true, until_ts = now_ts + 1.75 }
+        end
+    end
 end
 
 function resolver:on_round_start()
