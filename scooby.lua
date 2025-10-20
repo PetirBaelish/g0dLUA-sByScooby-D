@@ -212,7 +212,7 @@ lavender.pos = {
     velocity = vector(x_main / 2, y_main / 4),
     min_dmg = vector(x_main / 2, y_main / 2),
     modern = vector(x_main / 2, y_main / 2),
-    resolver = vector(x_main / x_main, y_main / 2),
+    resolver = vector(x_main / 2, y_main / 2),
     preview_line_vel = vector(x_main / 2, y_main / y_main )
 }
 
@@ -1867,10 +1867,10 @@ lavender.handlers.visuals.indicators = function()
 	if ui.get(lavender.ui.visuals.crosshair_indicator) == "modern" then
         modern_edit = ease.quad_in(0.2, modern_edit, (scoping and 30 or 0) - modern_edit, 1)
 
-        local measure_title = vector(renderer.measure_text("-c", "LAVENDER"))
+		local measure_title = vector(renderer.measure_text("-c", "scooby"))
         local keystate_active = os and not dt and "OS" or dt and not fd and "DT" or fd and "FD" or ""
 
-        renderer.text(lavender.pos.modern.x + modern_edit, lavender.pos.modern.y + 25, main_acc[1], main_acc[2], main_acc[3], main_acc[4], "-c", 0, lavender.funcs.renderer.gradient_text(main_acc[1], main_acc[2], main_acc[3], main_acc[4], "LAVENDER", 2.42, trail_accent[1], trail_accent[2], trail_accent[3], trail_accent[4]))
+		renderer.text(lavender.pos.modern.x + modern_edit, lavender.pos.modern.y + 25, main_acc[1], main_acc[2], main_acc[3], main_acc[4], "-c", 0, lavender.funcs.renderer.gradient_text(main_acc[1], main_acc[2], main_acc[3], main_acc[4], "scooby", 2.42, trail_accent[1], trail_accent[2], trail_accent[3], trail_accent[4]))
         renderer.text(lavender.pos.modern.x + modern_edit, lavender.pos.modern.y + 25 + measure_title.y, state_acc[1], state_acc[2], state_acc[3], 255, "-c", 0, state:upper())
         renderer.text(lavender.pos.modern.x + modern_edit, lavender.pos.modern.y + 25 + (measure_title.y * 2), keystate_acc[1], keystate_acc[2], keystate_acc[3], 255, "-c", 0, keystate_active)
 
@@ -1930,11 +1930,11 @@ lavender.handlers.visuals.indicators = function()
 
         local r2, g2, b2, a2 = unpack(lavender.funcs.misc.table_lerp({ar, ag, ab, aa}, {255,255,255,155}, math.abs(math.sin(globals.curtime()/2))))
 
-        local w1 = renderer.measure_text("-", " LAVENDER ")
+		local w1 = renderer.measure_text("-", " scooby ")
 
         local w2 = renderer.measure_text("-", string.upper(build))
 
-        renderer.text(x/2 - ((w1 + w2)/2 * fraction), y/2 + 20, r, g, b, a, "-", 0, "LAVENDER ")
+		renderer.text(x/2 - ((w1 + w2)/2 * fraction), y/2 + 20, r, g, b, a, "-", 0, "scooby ")
 
         renderer.text(x/2 - ((w1 + w2)/2 * fraction) + w1, y/2 + 20, r2, g2, b2, a2 , "-", 0, string.upper(build))
 
@@ -1970,7 +1970,7 @@ local dragging_kbaa_opacity = 0
 local drag_kb_check = false
 lavender.handlers.visuals.keybinds = function()
 
-    if entity.get_local_player(me) == nil and not (ui.is_menu_open() and lavender.ui.current_tab == "VISUALS") then
+    if entity.get_local_player() == nil and not (ui.is_menu_open() and lavender.ui.current_tab == "VISUALS") then
         return end
 
     local text_col = { 225, 225, 232 }
@@ -2203,7 +2203,7 @@ lavender.handlers.visuals.velocity_warning = function()
     if not lavender.funcs.misc.contains(ui.get(lavender.ui.visuals.extra_visual), "velocity warning") then
         return end
 
-    if (entity.get_local_player(me) == nil or entity.is_alive(me) == false) and not (ui.is_menu_open() and lavender.ui.current_tab == "VISUALS") then
+    if (entity.get_local_player() == nil or entity.is_alive(me) == false) and not (ui.is_menu_open() and lavender.ui.current_tab == "VISUALS") then
         return end
     
     local warning_x, warning_y = warning:measure(nil, 15)
