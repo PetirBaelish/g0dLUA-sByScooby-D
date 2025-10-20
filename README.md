@@ -1,4 +1,4 @@
-# Lavender.lua by Scooby
+# Scooby.lua by Scooby
 
 Lavender is a premium, modern Gamesense Lua focused on accuracy, stability and a clean experience. It features a custom resolver and quality-of-life systems that push consistency beyond stock GS and many public scripts.
 
