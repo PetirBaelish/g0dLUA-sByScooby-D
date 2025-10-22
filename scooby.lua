@@ -3422,7 +3422,9 @@ local resolver = {
     -- Counts high-confidence spread-like misses to trigger flips/escalation
     high_conf_miss_count = {},
     -- Hitchance threshold to reclassify 'spread' misses as resolver-related
-    hc_escalate_threshold = 80,
+    hc_escalate_threshold = 85,
+    -- Separate head threshold as headshots are more signal-rich
+    hc_head_escalate_threshold = 60,
     -- Prevent hyperactive side flipping; seconds between flips per-target
     flip_cooldown_s = 0.35,
     last_flip_time = {},
@@ -3678,7 +3680,8 @@ function resolver:on_net_update_end()
         self.data.vector_origin[ent] = vector(entity.get_origin(ent))
 
         if (self.old_data.simulation_time[ent] ~= nil and self.data.simulation_time[ent] == self.old_data.simulation_time[ent]) then
-            -- No animation update, keep previous resolver data for stability
+            -- No animation update, keep previous resolver data for stability; still copy data for next diff
+            self:copy_data(ent)
             goto skip
         end
  
@@ -3727,7 +3730,9 @@ function resolver:on_net_update_end()
 
             local to_x, to_y, to_z = lavender.funcs.aa.extend_vector(self.data.vector_origin[ent].x, self.data.vector_origin[ent].y, self.data.vector_origin[ent].z + 64, self.raycast_distance or 8192, self.data.eye_angles[ent].y + 180 - angle)
 
+            -- trace_line can return nil in some environments; guard and coerce
             local fraction = client.trace_line(ent, self.data.vector_origin[ent].x, self.data.vector_origin[ent].y, self.data.vector_origin[ent].z + 64, to_x, to_y, to_z)
+            fraction = tonumber(fraction) or 0
 
             trace_data[angle < 0 and "left" or "right"] = trace_data[angle < 0 and "left" or "right"] + fraction
 
@@ -3738,11 +3743,12 @@ function resolver:on_net_update_end()
 
         -- Throttled bullet sampling with caching
         local bullet_vote, confidence
-        if (now_tick - (self.last_sample_tick[ent] or -1e9)) >= (self.sample_interval_ticks or 2) then
+        if (now_tick - (self.last_sample_tick[ent] or -1000000000)) >= (self.sample_interval_ticks or 2) then
             local trace_bullet_data = {left = 0, right = 0}
             for i, angle in ipairs(angles) do
                 local to_x, to_y, to_z = lavender.funcs.aa.extend_vector(self.data.vector_origin[ent].x, self.data.vector_origin[ent].y, self.data.vector_origin[ent].z + 64, self.bullet_sample_distance or 128, self.data.eye_angles[ent].y + angle)
-                local _, damage = client.trace_bullet(me, eye_x, eye_y, eye_z, to_x, to_y, to_z, me)
+                local ok, damage = pcall(function() return select(2, client.trace_bullet(me, eye_x, eye_y, eye_z, to_x, to_y, to_z, me)) end)
+                damage = ok and tonumber(damage) or 0
                 trace_bullet_data[angle < 0 and "left" or "right"] = trace_bullet_data[angle < 0 and "left" or "right"] + (damage or 0)
             end
             if (trace_bullet_data.left + trace_bullet_data.right) > 0 then
@@ -3767,9 +3773,10 @@ function resolver:on_net_update_end()
             side = side_vote
         end
 
-        local target_yaw = math.deg(math.atan2(self.data.vector_origin[ent].y - y, self.data.vector_origin[ent].x - x))
+        -- Use our local eye position instead of undefined x/y
+        local target_yaw = math.deg(math.atan2(self.data.vector_origin[ent].y - (eye_y or 0), self.data.vector_origin[ent].x - (eye_x or 0)))
 
-        local relative_yaw = normalise_angle(self.data.eye_angles[ent].y - target_yaw)
+        local relative_yaw = normalise_angle((self.data.eye_angles[ent] and self.data.eye_angles[ent].y or 0) - target_yaw)
 
         if math.abs(relative_yaw) >= 25 and math.abs(relative_yaw) <= 140 then
 
@@ -3805,7 +3812,11 @@ function resolver:on_net_update_end()
 
         if self.old_data.eye_angles[ent] ~= nil then
 
-            self.data.yaw_delta[ent] = normalise_angle(self.data.eye_angles[ent].y - self.old_data.eye_angles[ent].y)
+            if self.data.eye_angles[ent] ~= nil and self.old_data.eye_angles[ent] ~= nil then
+                self.data.yaw_delta[ent] = normalise_angle((self.data.eye_angles[ent].y or 0) - (self.old_data.eye_angles[ent].y or 0))
+            else
+                self.data.yaw_delta[ent] = 0
+            end
 
             if self.old_data.yaw_delta[ent] ~= nil then
 
