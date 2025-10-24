@@ -27,10 +27,11 @@ local x_main, y_main = client.screen_size()
 
 local raw_s = vector(x_main, y_main)
 
--- Obex
-local obex_data = obex_fetch and obex_fetch() or {username = "royalty", build = "private", discord = "royalty"}
+-- Default to 'admin' for offline/failed Obex fetch
+local obex_data = obex_fetch and obex_fetch() or {username = "admin", build = "private", discord = "admin"}
 local username = obex_data.username:lower()
-local build = obex_data.build:lower() == "debug" and "alpha" or obex_data.build:lower()
+-- Map any debug/dev builds to private now that ALPHA is removed
+local build = obex_data.build:lower() == "debug" and "private" or obex_data.build:lower()
 local version = "1.19"
 
 local crr_t = ffi.typeof('void*(__thiscall*)(void*)')
@@ -151,7 +152,8 @@ lavender.ui = {
     private = {},
     current_tab ={},
     tab = {},
-    tabs = {"HOME", "ANTI-AIM", "VISUALS", "MISC", "CONFIGS", "ALPHA", "PRIVATE"}
+    -- Remove ALPHA tab; align UI to HOME/PRIVATE only for exclusive features
+    tabs = {"HOME", "ANTI-AIM", "VISUALS", "MISC", "CONFIGS", "PRIVATE"}
 }
 
 lavender.refs = {
@@ -706,7 +708,13 @@ lavender.funcs = {
             return "\a" .. unpack({lavender.funcs.renderer.rgba_to_hex(r, g, b, a)}) .. string_to_colour .. "\aCDCDCDFF"
         end),
         colour_text = LPH_JIT(function(string_to_colour, accent)
-            local r, g, b, a = ui.get(accent)
+            -- Respect global theme if available
+            local r, g, b, a = 185, 190, 255, 255
+            if lavender and lavender.ui and lavender.ui.visuals and lavender.ui.visuals.theme_colour then
+                r, g, b, a = ui.get(lavender.ui.visuals.theme_colour)
+            elseif accent ~= nil then
+                r, g, b, a = ui.get(accent)
+            end
             return "\a" .. unpack({lavender.funcs.renderer.rgba_to_hex(r, g, b, a)}) .. string_to_colour .. "\aCDCDCDFF"
         end),
 		rec = LPH_JIT(function(x, y, w, h, r, g, b, a, radius)
@@ -1456,7 +1464,7 @@ lavender.ui.tab.antiaim = lavender.handlers.ui.new(ui.new_button("AA", "Anti-aim
 lavender.ui.tab.visuals = lavender.handlers.ui.new(ui.new_button("AA", "Anti-aimbot angles", "› \aB9BEFFFFvisuals\aCDCDCDFF ‹", function() end), function() return lavender.ui.current_tab == "HOME" end)
 lavender.ui.tab.misc = lavender.handlers.ui.new(ui.new_button("AA", "Anti-aimbot angles", "› \aB9BEFFFFmisc\aCDCDCDFF ‹", function() end), function() return lavender.ui.current_tab == "HOME" end)
 lavender.ui.tab.configs = lavender.handlers.ui.new(ui.new_button("AA", "Anti-aimbot angles", "› \aB9BEFFFFconfigs\aCDCDCDFF ‹", function() end), function() return lavender.ui.current_tab == "HOME" end)
-lavender.ui.tab.alpha = lavender.handlers.ui.new(ui.new_button("AA", "Anti-aimbot angles", "› \aB9BEFFFFalpha\aCDCDCDFF ‹", function() end), function() return lavender.ui.current_tab == "HOME" and (build == "alpha" or not obex_fetch) end)
+-- Removed ALPHA tab (functionality duplicated by PRIVATE)
 lavender.ui.tab.private = lavender.handlers.ui.new(ui.new_button("AA", "Anti-aimbot angles", "› \aB9BEFFFFprivate\aCDCDCDFF ‹", function() end), function() return lavender.ui.current_tab == "HOME" and (build == "private" or not obex_fetch) end)
 lavender.ui.tab.home = lavender.handlers.ui.new(ui.new_button("AA", "Anti-aimbot angles", "› \aB9BEFFFFreturn home\aCDCDCDFF ‹", function() end), function() return lavender.ui.current_tab ~= "HOME" end)
 lavender.ui.tab.main_bar_2 = lavender.handlers.ui.new(ui.new_label("AA", "Anti-aimbot angles", "\a9F9F9F6B⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯"), function() return lavender.ui.current_tab ~= "HOME" end)
@@ -1492,7 +1500,10 @@ for k, v in pairs(lavender.antiaim.states) do
 
     local show = function() return ui.get(lavender.ui.aa.state) == v and lavender.ui.current_tab == "ANTIAIM" and (v == "global" and true or ui.get(lavender.ui.aa.states[v].master)) and ui.get(lavender.ui.aa.selection) == "state builder" end
 
-    lavender.ui.aa.states[v].pitch                  = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch", {"off", "default", "up", "down", "minimal", "random", "custom", "custom 3"}), function() return show() end, true)
+    lavender.ui.aa.states[v].pitch                  = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch", {"off", "default", "up", "down", "minimal", "random", "custom", "custom 3", "modifier"}), function() return show() end, true)
+    lavender.ui.aa.states[v].pitch_mod              = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "  ›› \aB9BEFFFFpitch modifier", {"off", "jitter", "jitter synced", "sine", "noise"}), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "modifier" end, true)
+    lavender.ui.aa.states[v].pitch_mod_amp          = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "  ›› \aB9BEFFFFmodifier amplitude", 1, 45, 12, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "modifier" end, true)
+    lavender.ui.aa.states[v].pitch_mod_speed        = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "  ›› \aB9BEFFFFmodifier speed", 1, 20, 8, true, "t"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "modifier" end, true)
     lavender.ui.aa.states[v].pitch_custom           = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch custom", -89, 89, 0, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom" end, true)
     lavender.ui.aa.states[v].pitch_custom3_mode     = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› angel mode", {"cycle", "cycle @ 2", "cycle @ 3", "random", "angle 1", "angle 2", "angle 3"}), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom 3" end, true)
     lavender.ui.aa.states[v].pitch_custom3_a1       = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles",  "‹\aB9BEFFFF" .. v ..  "\aCDCDCDFF› pitch angle 1", -89, 89, 0, true, "°"), function() return show() and ui.get(lavender.ui.aa.states[v].pitch) == "custom 3" end, true)
@@ -1579,6 +1590,9 @@ lavender.ui.aa.freestanding_jitter = lavender.handlers.ui.new(ui.new_checkbox("A
 -- Visuals
 --> Crosshair Indicators
 lavender.ui.visuals.crosshair_indicator = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "‹\aB9BEFFFFvisuals\aCDCDCDFF› crosshair \aB9BEFFFFindicators", {"-", "default", "modern"}), function() return lavender.ui.current_tab == "VISUALS" end)
+-- Global theme: one color to skin the Lua UI and on-screen accents
+lavender.ui.visuals.theme_lab = lavender.handlers.ui.new(ui.new_label("AA", "Anti-aimbot angles", " ›› \aB9BEFFFFglobal theme"), function() return lavender.ui.current_tab == "VISUALS" end)
+lavender.ui.visuals.theme_colour = lavender.handlers.ui.new(ui.new_color_picker("AA", "Anti-aimbot angles", "inline global theme", 185, 190, 255, 255), function() return lavender.ui.current_tab == "VISUALS" end)
 --> Colours for crosshair indicators
 lavender.ui.visuals.main_accent_lab = lavender.handlers.ui.new(ui.new_label("AA", "Anti-aimbot angles", " ›› \aB9BEFFFFmain accent"), function() return lavender.ui.current_tab == "VISUALS" and (ui.get(lavender.ui.visuals.crosshair_indicator) == "default" or ui.get(lavender.ui.visuals.crosshair_indicator) == "modern") end)
 lavender.ui.visuals.main_accent = lavender.handlers.ui.new(ui.new_color_picker("AA", "Anti-aimbot angles", "inline main accent", 185, 190, 255, 255), function() return lavender.ui.current_tab == "VISUALS" and (ui.get(lavender.ui.visuals.crosshair_indicator) == "default" or ui.get(lavender.ui.visuals.crosshair_indicator) == "modern") end)
@@ -1654,10 +1668,6 @@ lavender.ui.config.import = lavender.handlers.ui.new(ui.new_button("AA", "Anti-a
 -- Export
 lavender.ui.config.export = lavender.handlers.ui.new(ui.new_button("AA", "Anti-aimbot angles", "›› \aB9BEFFFFexport", function() return end), function() return lavender.ui.current_tab == "CONFIGS" end)
 
--- alpha
-
---lavender.ui.alpha.soon_lab = lavender.handlers.ui.new(ui.new_label("AA", "Anti-aimbot angles", "‹ \aB9BEFFFFcoming \aCDCDCDFFsoon ›"), function() return lavender.ui.current_tab == "ALPHA" end)
-
 -- private
 
 lavender.ui.private.resolver_master = lavender.handlers.ui.new(ui.new_checkbox("AA", "Anti-aimbot angles", "‹\aB9BEFFFFprivate\aCDCDCDFF› desync \aB9BEFFFFresolver"), function() return lavender.ui.current_tab == "PRIVATE" end)
@@ -1665,14 +1675,22 @@ lavender.ui.private.resolver_panel = lavender.handlers.ui.new(ui.new_multiselect
 
 -- exclusive
 
-lavender.ui.aa.defensive_master = lavender.handlers.ui.new(ui.new_checkbox("AA", "Anti-aimbot angles", "‹\aB9BEFFFF" .. build .. "\aCDCDCDFF› defensive \aB9BEFFFFyaw"), function() return (lavender.ui.current_tab == "PRIVATE" or lavender.ui.current_tab == "ALPHA") end)
-lavender.ui.aa.defensive_state = lavender.handlers.ui.new(ui.new_multiselect("AA", "Anti-aimbot angles", "›› \aB9BEFFFFallow in state", "standing", "moving", "ducking", "air", "air duck", "slowwalk"), function() return (lavender.ui.current_tab == "PRIVATE" or lavender.ui.current_tab == "ALPHA") and ui.get(lavender.ui.aa.defensive_master) end)
+lavender.ui.aa.defensive_master = lavender.handlers.ui.new(ui.new_checkbox("AA", "Anti-aimbot angles", "‹\aB9BEFFFF" .. build .. "\aCDCDCDFF› defensive \aB9BEFFFFyaw"), function() return lavender.ui.current_tab == "PRIVATE" end)
+lavender.ui.aa.defensive_state = lavender.handlers.ui.new(ui.new_multiselect("AA", "Anti-aimbot angles", "›› \aB9BEFFFFallow in state", "standing", "moving", "ducking", "air", "air duck", "slowwalk"), function() return lavender.ui.current_tab == "PRIVATE" and ui.get(lavender.ui.aa.defensive_master) end)
 
-lavender.ui.aa.defensive_checks = lavender.handlers.ui.new(ui.new_multiselect("AA", "Anti-aimbot angles", "›› \aB9BEFFFFadditional checks", "velocity", "not choking"), function() return (lavender.ui.current_tab == "PRIVATE" or lavender.ui.current_tab == "ALPHA") and ui.get(lavender.ui.aa.defensive_master) end)
-lavender.ui.aa.defensive_custom = lavender.handlers.ui.new(ui.new_checkbox("AA", "Anti-aimbot angles", "‹\aB9BEFFFFdefensive\aCDCDCDFF› customise \aB9BEFFFFpitch"), function() return (lavender.ui.current_tab == "PRIVATE" or lavender.ui.current_tab == "ALPHA") and ui.get(lavender.ui.aa.defensive_master) end)
+lavender.ui.aa.defensive_checks = lavender.handlers.ui.new(ui.new_multiselect("AA", "Anti-aimbot angles", "›› \aB9BEFFFFadditional checks", "velocity", "not choking"), function() return lavender.ui.current_tab == "PRIVATE" and ui.get(lavender.ui.aa.defensive_master) end)
+lavender.ui.aa.defensive_custom = lavender.handlers.ui.new(ui.new_checkbox("AA", "Anti-aimbot angles", "‹\aB9BEFFFFdefensive\aCDCDCDFF› customise \aB9BEFFFFpitch"), function() return lavender.ui.current_tab == "PRIVATE" and ui.get(lavender.ui.aa.defensive_master) end)
 
-lavender.ui.aa.defensive_base_pitch = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "  ›› \aB9BEFFFFbase pitch", {"up", "down", "zero"}), function() return (lavender.ui.current_tab == "PRIVATE" or lavender.ui.current_tab == "ALPHA") and ui.get(lavender.ui.aa.defensive_master) and ui.get(lavender.ui.aa.defensive_custom) end)
-lavender.ui.aa.defensive_fallback_pitch = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "  ›› \aB9BEFFFFfallback pitch", {"up", "down", "zero"}), function() return (lavender.ui.current_tab == "PRIVATE" or lavender.ui.current_tab == "ALPHA") and ui.get(lavender.ui.aa.defensive_master) and ui.get(lavender.ui.aa.defensive_custom) end)
+lavender.ui.aa.defensive_base_pitch = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "  ›› \aB9BEFFFFbase pitch", {"up", "down", "zero"}), function() return lavender.ui.current_tab == "PRIVATE" and ui.get(lavender.ui.aa.defensive_master) and ui.get(lavender.ui.aa.defensive_custom) end)
+lavender.ui.aa.defensive_fallback_pitch = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "  ›› \aB9BEFFFFfallback pitch", {"up", "down", "zero"}), function() return lavender.ui.current_tab == "PRIVATE" and ui.get(lavender.ui.aa.defensive_master) and ui.get(lavender.ui.aa.defensive_custom) end)
+
+-- Defensive AA: flexible yaw and pitch modifiers
+lavender.ui.aa.defensive_pitch_mod    = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "  ›› \aB9BEFFFFpitch modifier", {"off", "jitter", "sine", "noise"}), function() return lavender.ui.current_tab == "PRIVATE" and ui.get(lavender.ui.aa.defensive_master) end)
+lavender.ui.aa.defensive_pitch_amp    = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles", "  ›› \aB9BEFFFFpitch amplitude", 1, 45, 12, true, "°"), function() return lavender.ui.current_tab == "PRIVATE" and ui.get(lavender.ui.aa.defensive_master) end)
+lavender.ui.aa.defensive_pitch_speed  = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles", "  ›› \aB9BEFFFFpitch speed", 1, 20, 8, true, "t"), function() return lavender.ui.current_tab == "PRIVATE" and ui.get(lavender.ui.aa.defensive_master) end)
+lavender.ui.aa.defensive_yaw_mode     = lavender.handlers.ui.new(ui.new_combobox("AA", "Anti-aimbot angles", "  ›› \aB9BEFFFFyaw mode", {"spin", "180", "static"}), function() return lavender.ui.current_tab == "PRIVATE" and ui.get(lavender.ui.aa.defensive_master) end)
+lavender.ui.aa.defensive_yaw_offset   = lavender.handlers.ui.new(ui.new_slider("AA", "Anti-aimbot angles", "  ›› \aB9BEFFFFyaw offset", -180, 180, 63, true, "°"), function() return lavender.ui.current_tab == "PRIVATE" and ui.get(lavender.ui.aa.defensive_master) end)
+lavender.ui.aa.defensive_thresholds   = lavender.handlers.ui.new(ui.new_multiselect("AA", "Anti-aimbot angles", "  ›› \aB9BEFFFFtriggers", "can hit me", "enemy slowed", "landing window"), function() return lavender.ui.current_tab == "PRIVATE" and ui.get(lavender.ui.aa.defensive_master) end)
 
 -- Set new other moves
 
@@ -1853,9 +1871,10 @@ lavender.handlers.visuals.indicators = function()
     if entity.is_alive(me) == false or ui.get(lavender.ui.visuals.crosshair_indicator) == "-" then
         return end
 
-    local main_acc = {ui.get(lavender.ui.visuals.main_accent)}
+    local theme = {ui.get(lavender.ui.visuals.theme_colour)}
+    local main_acc = theme
     local state_acc = {ui.get(lavender.ui.visuals.state_accent)}
-    local keystate_acc = {ui.get(lavender.ui.visuals.keystate_accent)}
+    local keystate_acc = theme
     local trail_accent = {ui.get(lavender.ui.visuals.trail_accent)}
 
     local dt = ui.get(lavender.refs.rage.double_tap_key) and ui.get(lavender.refs.rage.double_tap)
@@ -1974,7 +1993,7 @@ lavender.handlers.visuals.keybinds = function()
         return end
 
     local text_col = { 225, 225, 232 }
-    local bar_col = { ui.get(lavender.ui.visuals.keybind_sec_bar_accent) }
+    local bar_col = theme
     local main_col = { 19, 19, 19 }
     local screen = vector(client.screen_size())
     local mouse = vector(ui.mouse_position())
@@ -2081,7 +2100,8 @@ local dragging_opacity_wm = 0
 lavender.handlers.visuals.watermark = function()
     local padding = lavender.visuals.watermark.padding
     local colour = lavender.ui.visuals.watermark_accent
-    local r, g, b = ui.get(colour)
+    -- Override with global theme if present
+    local r, g, b = table.unpack({ui.get(lavender.ui.visuals.theme_colour)})
     local hour, minute, second, mill = client.system_time()
     local hr, m, s = string.format("%02d", hour), string.format("%02d", minute), string.format("%02d", second)
     local string = "scooby".. lavender.funcs.renderer.colour_text(".pub", colour) .. " [" .. build .. "] | " .. lavender.funcs.renderer.colour_text(username, colour) .. " | " .. lavender.funcs.renderer.colour_text(hr, colour) .. ":" .. lavender.funcs.renderer.colour_text(m, colour) .. ":" .. lavender.funcs.renderer.colour_text(s, colour)
@@ -2351,8 +2371,9 @@ lavender.handlers.manual_aa_arrows = function()
         return 
     end
 
-    local r, g, b, a = ui.get(lavender.ui.visuals.manual_aa_main_colour)
-    local r2, g2, b2, a2 = ui.get(lavender.ui.visuals.manual_aa_sec_colour)
+    -- Use global theme for arrows for consistent theming
+    local r, g, b, a = table.unpack({ui.get(lavender.ui.visuals.theme_colour)})
+    local r2, g2, b2, a2 = r, g, b, 120
     local active = manual_mode == "left" or manual_mode == "right"
 
     if manual_mode == "left" then
@@ -2624,7 +2645,29 @@ client.set_event_callback("setup_command", function(cmd)
             ui.set(lavender.refs.aa.pitch, "custom")
             ui.set(lavender.refs.aa.pitch_custom, chosen)
         else
-            ui.set(lavender.refs.aa.pitch, pitch_choice)
+            if pitch_choice == "modifier" then
+                local mod = ui.get(lavender.ui.aa.states[state].pitch_mod)
+                local amp = ui.get(lavender.ui.aa.states[state].pitch_mod_amp)
+                local spd = ui.get(lavender.ui.aa.states[state].pitch_mod_speed)
+                local t = globals.tickcount() / math.max(spd, 1)
+                local base = 0
+                local value = 0
+                if mod == "jitter" then
+                    value = (math.floor(t) % 2 == 0) and amp or -amp
+                elseif mod == "jitter synced" then
+                    value = (cmd.command_number % 2 == 0) and amp or -amp
+                elseif mod == "sine" then
+                    value = math.floor(math.sin(t) * amp)
+                elseif mod == "noise" then
+                    value = client.random_int(-amp, amp)
+                else
+                    value = 0
+                end
+                ui.set(lavender.refs.aa.pitch, "custom")
+                ui.set(lavender.refs.aa.pitch_custom, math.max(-89, math.min(89, base + value)))
+            else
+                ui.set(lavender.refs.aa.pitch, pitch_choice)
+            end
         end
         ui.set(lavender.refs.aa.yaw_base, ui.get(lavender.ui.aa.states[state].yaw_base))
         ui.set(lavender.refs.aa.yaw, ui.get(lavender.ui.aa.states[state].yaw))
@@ -3034,20 +3077,31 @@ client.set_event_callback("setup_command", function(cmd)
 
     end_result = hittable or hittable2 or hittable3 or hittable4 or hittable5
     if not end_result and (states or not landing6) and check_vel then
-        ui.set(lavender.refs.aa.pitch, "custom")
-        if ui.get(lavender.ui.aa.defensive_custom) then
-            ui.set(lavender.refs.aa.pitch_custom, not control_def and lavender.funcs.aa.convert_pitch(ui.get(lavender.ui.aa.defensive_base_pitch)) or lavender.funcs.aa.convert_pitch(ui.get(lavender.ui.aa.defensive_fallback_pitch)))
-        else
-            ui.set(lavender.refs.aa.pitch_custom, control_def and math.random(-89, 12) or 78)
+        -- Defensive pitch selection with modifier support
+        local dmod = ui.get(lavender.ui.aa.defensive_pitch_mod)
+        local damp = ui.get(lavender.ui.aa.defensive_pitch_amp)
+        local dspd = ui.get(lavender.ui.aa.defensive_pitch_speed)
+        local t = globals.tickcount() / math.max(dspd, 1)
+        local def_pitch = not control_def and lavender.funcs.aa.convert_pitch(ui.get(lavender.ui.aa.defensive_base_pitch)) or lavender.funcs.aa.convert_pitch(ui.get(lavender.ui.aa.defensive_fallback_pitch))
+        local offset = 0
+        if dmod == "jitter" then
+            offset = (math.floor(t) % 2 == 0) and damp or -damp
+        elseif dmod == "sine" then
+            offset = math.floor(math.sin(t) * damp)
+        elseif dmod == "noise" then
+            offset = client.random_int(-damp, damp)
         end
+        ui.set(lavender.refs.aa.pitch, "custom")
+        ui.set(lavender.refs.aa.pitch_custom, math.max(-89, math.min(89, def_pitch + offset)))
 
-        ui.set(lavender.refs.aa.yaw, control_def and "spin" or "180")
-       -- if by then
-            ui.set(lavender.refs.aa.yaw_offset, control_def and 63 or math.random(-3,3))
-       -- else
-        --    ui.set(lavender.refs.aa.yaw_offset, control_def and twist(-180, 80, 8) or twist(180, -90, 8))
-
-       -- end
+        -- Defensive yaw selection
+        local dyaw_mode = ui.get(lavender.ui.aa.defensive_yaw_mode)
+        ui.set(lavender.refs.aa.yaw, dyaw_mode)
+        if dyaw_mode == "static" then
+            ui.set(lavender.refs.aa.yaw_offset, ui.get(lavender.ui.aa.defensive_yaw_offset))
+        else
+            ui.set(lavender.refs.aa.yaw_offset, ui.get(lavender.ui.aa.defensive_yaw_offset))
+        end
     end
     
 
@@ -3665,6 +3719,17 @@ function resolver:on_net_update_end()
     local me = entity.get_local_player()
     local eye_x, eye_y, eye_z = client.eye_position()
     local now_tick = globals.tickcount and globals.tickcount() or 0
+    -- Low-ping adaptation: shorten sampling interval and flip cooldown
+    local ping_ms = (client.latency and (client.latency() * 1000)) or 50
+    if ping_ms <= 50 then
+        self.sample_interval_ticks = 1
+        self.flip_cooldown_s = 0.25
+        self.bullet_conf_threshold = 0.10
+    else
+        self.sample_interval_ticks = 2
+        self.flip_cooldown_s = 0.35
+        self.bullet_conf_threshold = 0.12
+    end
 
     for id = 1, globals.maxplayers() do
 
@@ -3819,19 +3884,18 @@ function resolver:on_net_update_end()
             end
 
             if self.old_data.yaw_delta[ent] ~= nil then
-
-                if math.abs(self.data.yaw_delta[ent]) >= 32 or math.abs(self.old_data.yaw_delta[ent]) >= 32 then
-
+                local lp_ping_ms = (client.latency and (client.latency() * 1000)) or 50
+                local high_gate = (lp_ping_ms <= 50) and 28 or 32
+                local low_lo, low_hi = 20, (lp_ping_ms <= 50) and 28 or 32
+                if math.abs(self.data.yaw_delta[ent]) >= high_gate or math.abs(self.old_data.yaw_delta[ent]) >= high_gate then
                     body_yaw = max_body_yaw
                     side =  (self.data.yaw_delta[ent] > 0) and 0 or 1
                     self.mode[ent] = "HIGH JITTER"
-
-                elseif (math.abs(self.data.yaw_delta[ent]) > 22 and math.abs(self.data.yaw_delta[ent]) < 32) or (math.abs(self.old_data.yaw_delta[ent]) > 22 and math.abs(self.old_data.yaw_delta[ent]) < 32) then
+                elseif (math.abs(self.data.yaw_delta[ent]) > low_lo and math.abs(self.data.yaw_delta[ent]) < low_hi) or (math.abs(self.old_data.yaw_delta[ent]) > low_lo and math.abs(self.old_data.yaw_delta[ent]) < low_hi) then
                     body_yaw = max_body_yaw
                     side =  (self.data.yaw_delta[ent] > 0) and 0 or 1
                     self.mode[ent] = "LOW JITTER"
                 end
-
             end
 
         end
@@ -3941,7 +4005,10 @@ function resolver:on_miss(shot)
     local aimed_hg = tonumber(shot.hitgroup or -1) or -1
     local is_headshot_attempt = aimed_hg == 1
     -- Consider head attempts with moderate HC as signal (helps reduce 'spread' masking wrong side)
-    local is_high_conf_spread = (reason == "spread" or reason == "?") and (hit_chance >= (self.hc_escalate_threshold or 80) or (is_headshot_attempt and hit_chance >= 58))
+    local ping_ms = (client.latency and (client.latency() * 1000)) or 50
+    local hc_thresh = (ping_ms <= 50) and (self.hc_escalate_threshold - 5) or self.hc_escalate_threshold
+    local head_hc_thresh = (ping_ms <= 50) and (self.hc_head_escalate_threshold - 5) or self.hc_head_escalate_threshold
+    local is_high_conf_spread = (reason == "spread" or reason == "?") and (hit_chance >= (hc_thresh or 80) or (is_headshot_attempt and hit_chance >= (head_hc_thresh or 58)))
     -- Treat head/high-HC misses more aggressively
 
     -- Filter out non-resolver misses (true spread, DT tick, prediction issues) to avoid destabilizing resolver state
@@ -3969,7 +4036,7 @@ function resolver:on_miss(shot)
     local should_escalate = false
     if reason:find("resolver", 1, true) or reason:find("desync", 1, true) or reason == "body yaw mismatch" then
         should_escalate = true
-    elseif is_high_conf_spread and (is_headshot_attempt or hit_chance >= (self.hc_escalate_threshold + 7)) then
+    elseif is_high_conf_spread and (is_headshot_attempt or hit_chance >= (hc_thresh + 7)) then
         -- If we missed head with 90+ HC and reason is spread, we likely had wrong side/amp
         should_escalate = true
         self.high_conf_miss_count[shot.target] = (self.high_conf_miss_count[shot.target] or 0) + 1
